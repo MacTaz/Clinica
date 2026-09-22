@@ -1,0 +1,16 @@
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: clinica
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_USER: clinica
+      MYSQL_PASSWORD: clinica
+    ports:
+      - "3306:3306"
+    volumes:
+      - clinica_mysql_data:/var/lib/mysql
+
+volumes:
+  clinica_mysql_data:

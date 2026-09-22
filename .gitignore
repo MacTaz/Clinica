@@ -1,0 +1,14 @@
+# backend
+backend/target/
+backend/.env
+*.class
+
+# frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+
+# editors / os
+.idea/
+.vscode/
+.DS_Store
