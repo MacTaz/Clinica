@@ -1,24 +1,76 @@
 package com.clinica.service.appointment;
 
 import com.clinica.dto.appointment.DoctorAvailability;
-import java.time.LocalDate;
-import java.util.List;
+import com.clinica.model.doctor.Doctor;
+import com.clinica.model.doctor.DoctorSchedule;
+import com.clinica.repository.appointment.AppointmentRepository;
+import com.clinica.repository.doctor.DoctorRepository;
 import org.springframework.stereotype.Service;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Service
 public class AvailabilityService {
 
     private static final int SLOT_MINUTES = 30;
 
-    public List<DoctorAvailability> getAvailableDoctors(Long specializationId, LocalDate date) {
-        // TODO(Mico): find doctors in this specialization who work on
-        // date.getDayOfWeek(), split each doctor's schedule blocks into
-        // 30-minute slots, remove slots already booked that day (and, if
-        // date is today, slots already in the past). See docs/API_CONTRACT.md
-        // for the exact DoctorAvailability shape the frontend expects.
-        throw new UnsupportedOperationException("TODO: implement getAvailableDoctors");
+    private final DoctorRepository doctorRepository;
+    private final AppointmentRepository appointmentRepository;
+
+    public AvailabilityService(DoctorRepository doctorRepository,
+                               AppointmentRepository appointmentRepository) {
+        this.doctorRepository = doctorRepository;
+        this.appointmentRepository = appointmentRepository;
     }
 
-    // TODO(Mico): isSlotOpen(Doctor, LocalDate, LocalTime) — reused by
-    // AppointmentService to re-check a slot right before saving.
+    // Returns available doctors with free 30-min slots for the given specialization and date.
+    // Per API_CONTRACT.md: GET /appointments/availability?specializationId={id}&date={yyyy-mm-dd}
+    public List<DoctorAvailability> getAvailableDoctors(Long specializationId, LocalDate date) {
+        List<Doctor> doctors = doctorRepository.findBySpecializationId(specializationId);
+        LocalTime now = LocalTime.now();
+        boolean isToday = date.equals(LocalDate.now());
+
+        List<DoctorAvailability> result = new ArrayList<>();
+        for (Doctor doctor : doctors) {
+            List<LocalTime> freeSlots = new ArrayList<>();
+
+            for (DoctorSchedule block : doctor.getSchedule()) {
+                // Only include schedule blocks that match the requested day of week
+                if (!block.getDayOfWeek().equals(date.getDayOfWeek())) continue;
+
+                // Split the block into 30-minute slots
+                LocalTime slot = block.getStartTime();
+                while (!slot.plusMinutes(SLOT_MINUTES).isAfter(block.getEndTime())) {
+                    // Skip slots already in the past if date is today
+                    if (isToday && !slot.isAfter(now)) {
+                        slot = slot.plusMinutes(SLOT_MINUTES);
+                        continue;
+                    }
+                    // Skip slots already booked for this doctor
+                    if (!appointmentRepository.existsByDoctorIdAndAppointmentDateAndStartTime(
+                            doctor.getId(), date, slot)) {
+                        freeSlots.add(slot);
+                    }
+                    slot = slot.plusMinutes(SLOT_MINUTES);
+                }
+            }
+
+            if (!freeSlots.isEmpty()) {
+                result.add(new DoctorAvailability(
+                        doctor.getId(),
+                        doctor.getName(),
+                        freeSlots
+                ));
+            }
+        }
+        return result;
+    }
+
+    // Reused by AppointmentService to re-check a slot right before saving (prevents race conditions).
+    public boolean isSlotOpen(Doctor doctor, LocalDate date, LocalTime startTime) {
+        return !appointmentRepository.existsByDoctorIdAndAppointmentDateAndStartTime(
+                doctor.getId(), date, startTime);
+    }
 }
