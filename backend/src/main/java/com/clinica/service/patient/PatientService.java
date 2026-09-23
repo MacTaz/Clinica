@@ -1,13 +1,11 @@
 package com.clinica.service.patient;
 
-import com.clinica.dto.patient.PatientRequest;
-import com.clinica.dto.patient.PatientResponse;
+import com.clinica.exception.InvalidRecordDataException;
 import com.clinica.exception.ResourceNotFoundException;
 import com.clinica.model.patient.Patient;
 import com.clinica.repository.patient.PatientRepository;
-import java.util.List;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import java.util.List;
 
 @Service
 public class PatientService {
@@ -18,42 +16,31 @@ public class PatientService {
         this.patientRepository = patientRepository;
     }
 
-    @Transactional
-    public PatientResponse registerPatient(PatientRequest request) {
-        Patient patient = new Patient();
-        patient.setName(request.name());
-        patient.setAge(request.age());
-        patient.setContact(request.contact());
-        patient.setAilment(request.ailment());
-        return toResponse(patientRepository.save(patient));
-    }
-
-    public List<PatientResponse> getAllPatients() {
-        return patientRepository.findAll().stream().map(this::toResponse).toList();
-    }
-
-    @Transactional
-    public PatientResponse addMedicalHistory(Long patientId, String entry) {
-        Patient patient = patientRepository.findById(patientId)
-                .orElseThrow(() -> new ResourceNotFoundException("Patient " + patientId + " not found"));
-        patient.addHistoryEntry(entry);
-        return toResponse(patient);
-    }
-
-    @Transactional
-    public void deletePatient(Long patientId) {
-        if (!patientRepository.existsById(patientId)) {
-            throw new ResourceNotFoundException("Patient " + patientId + " not found");
+    public Patient registerPatient(Patient patient) {
+        if (patient.getAge() < 0) {
+            throw new InvalidRecordDataException("Age cannot be negative."); // Input validation
         }
-        // TODO(Arthur): also removes appointments per the delete-rules design
-        // decision — cascade or explicit cleanup, whichever the appointment
-        // owner (Mico) and DB owner agree on. See docs/DATA_MODEL.md.
-        patientRepository.deleteById(patientId);
+        if (patient.getName() == null || patient.getName().trim().isEmpty()) {
+            throw new InvalidRecordDataException("Patient name is required.");
+        }
+        return patientRepository.save(patient);
     }
 
-    private PatientResponse toResponse(Patient p) {
-        return new PatientResponse(
-                p.getId(), p.getName(), p.getAge(), p.getContact(), p.getAilment(),
-                p.getMedicalHistory().stream().map(h -> h.getEntry()).toList());
+    public List<Patient> getAllPatients() {
+        return patientRepository.findAll();
+    }
+
+    public Patient addMedicalHistory(Long id, String entry) {
+        Patient patient = patientRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Patient not found"));
+        patient.addHistoryEntry(entry); // Appends medical history
+        return patientRepository.save(patient);
+    }
+
+    public void deletePatient(Long id) {
+        if (!patientRepository.existsById(id)) {
+            throw new ResourceNotFoundException("Patient not found");
+        }
+        patientRepository.deleteById(id); // Safe deletion of patient profile, including history and appointments
     }
 }

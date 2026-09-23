@@ -3,50 +3,102 @@ package com.clinica.controller.doctor;
 import com.clinica.dto.doctor.DoctorRequest;
 import com.clinica.dto.doctor.DoctorResponse;
 import com.clinica.dto.specialization.SpecializationDto;
-import java.math.BigDecimal;
+import com.clinica.exception.ResourceNotFoundException;
+import com.clinica.model.doctor.Doctor;
+import com.clinica.model.doctor.DoctorSchedule;
+import com.clinica.model.specialization.Specialization;
+import com.clinica.repository.specialization.SpecializationRepository;
+import com.clinica.service.doctor.DoctorService;
+import java.time.DayOfWeek;
+import java.time.LocalTime;
 import java.util.List;
+import java.util.stream.Collectors;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
-/**
- * STUB: routes match docs/API_CONTRACT.md and return realistic mock data
- * so the frontend can build against real HTTP calls today. Swap the body
- * of each method for a call into DoctorService once it's implemented.
- */
 @RestController
 @RequestMapping("/api/doctors")
 public class DoctorController {
 
+    private final DoctorService doctorService;
+    private final SpecializationRepository specializationRepository;
+
+    // Injecting the service and repository via constructor
+    public DoctorController(DoctorService doctorService, SpecializationRepository specializationRepository) {
+        this.doctorService = doctorService;
+        this.specializationRepository = specializationRepository;
+    }
+
     @PostMapping
     public ResponseEntity<DoctorResponse> createDoctor(@RequestBody DoctorRequest request) {
-        // TODO(Arthur): return doctorService.registerDoctor(request) instead.
-        DoctorResponse mock = new DoctorResponse(
-                1L, request.name(), request.age(), request.contact(),
-                new SpecializationDto(request.specializationId(), "Dermatology"),
-                request.salary(), List.of());
-        return ResponseEntity.status(HttpStatus.CREATED).body(mock);
+        // 1. Fetch the specialization to link to the new doctor
+        Specialization spec = specializationRepository.findById(request.specializationId())
+                .orElseThrow(() -> new ResourceNotFoundException("Specialization not found with ID: " + request.specializationId()));
+
+        // 2. Map the DTO to the Doctor Entity
+        Doctor doctor = new Doctor();
+        doctor.setName(request.name());
+        doctor.setAge(request.age());
+        doctor.setContact(request.contact());
+        doctor.setSpecialization(spec);
+        doctor.setSalary(request.salary());
+
+        // 3. Map the schedule DTOs to DoctorSchedule Entities
+        List<DoctorSchedule> schedules = request.schedules().stream().map(s -> {
+            DoctorSchedule schedule = new DoctorSchedule();
+            schedule.setDayOfWeek(DayOfWeek.valueOf(s.dayOfWeek().toUpperCase()));
+            schedule.setStartTime(LocalTime.parse(s.startTime()));
+            schedule.setEndTime(LocalTime.parse(s.endTime()));
+            return schedule;
+        }).collect(Collectors.toList());
+
+        doctor.setSchedule(schedules);
+
+        // 4. Save using the service and return the mapped response
+        Doctor savedDoctor = doctorService.registerDoctor(doctor);
+        return ResponseEntity.status(HttpStatus.CREATED).body(mapToResponse(savedDoctor));
     }
 
     @GetMapping
     public List<DoctorResponse> getAllDoctors() {
-        // TODO(Arthur): return doctorService.getAllDoctors() instead.
-        return List.of(new DoctorResponse(
-                1L, "Dr. Reyes", 41, "0917-000-0000",
-                new SpecializationDto(1L, "Dermatology"), new BigDecimal("45000.00"),
-                List.of(new DoctorResponse.ScheduleBlock(1L, "MONDAY", "09:00", "12:00"))));
+        // Fetch all doctors and map them to DTOs
+        return doctorService.getAllDoctors().stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteDoctor(@PathVariable Long id) {
-        // TODO(Arthur): return doctorService.deleteDoctor(id) instead;
-        // throws ResourceInUseException (409) if the doctor has appointments.
+        // Service handles the ResourceInUseException block if appointments exist
+        doctorService.deleteDoctor(id);
         return ResponseEntity.noContent().build();
+    }
+
+    // Helper method to convert a Doctor Entity into a DoctorResponse DTO
+    private DoctorResponse mapToResponse(Doctor doctor) {
+        SpecializationDto specDto = new SpecializationDto(
+                doctor.getSpecialization().getId(),
+                doctor.getSpecialization().getName()
+        );
+
+        List<DoctorResponse.ScheduleBlock> scheduleBlocks = doctor.getSchedule().stream()
+                .map(s -> new DoctorResponse.ScheduleBlock(
+                        s.getId(),
+                        s.getDayOfWeek().name(),
+                        s.getStartTime().toString(),
+                        s.getEndTime().toString()
+                ))
+                .collect(Collectors.toList());
+
+        return new DoctorResponse(
+                doctor.getId(),
+                doctor.getName(),
+                doctor.getAge(),
+                doctor.getContact(),
+                specDto,
+                doctor.getSalary(),
+                scheduleBlocks
+        );
     }
 }

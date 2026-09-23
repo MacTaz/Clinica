@@ -1,12 +1,7 @@
 package com.clinica.model.patient;
 
 import com.clinica.model.Person;
-import jakarta.persistence.CascadeType;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.OneToMany;
-import jakarta.persistence.OrderBy;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -14,12 +9,17 @@ import java.util.List;
 @Table(name = "patients")
 public class Patient extends Person {
 
-    @Column(nullable = false, length = 255)
+    @Column(nullable = false)
     private String ailment;
 
-    @OneToMany(mappedBy = "patient", cascade = CascadeType.ALL, orphanRemoval = true)
-    @OrderBy("entryOrder ASC")
-    private List<PatientMedicalHistoryEntry> medicalHistory = new ArrayList<>();
+    @ElementCollection
+    @CollectionTable(
+            name = "patient_medical_history",
+            joinColumns = @JoinColumn(name = "patient_id")
+    )
+    @OrderColumn(name = "entry_order")
+    @Column(name = "entry", columnDefinition = "TEXT", nullable = false)
+    private List<String> medicalHistory = new ArrayList<>(); // Private field for sensitive data
 
     @Override
     public String displayRole() {
@@ -28,14 +28,14 @@ public class Patient extends Person {
 
     public String getAilment() { return ailment; }
     public void setAilment(String ailment) { this.ailment = ailment; }
-    public List<PatientMedicalHistoryEntry> getMedicalHistory() { return medicalHistory; }
+
+    public List<String> getMedicalHistory() {
+        return new ArrayList<>(medicalHistory);
+    }
 
     public void addHistoryEntry(String entry) {
-        int nextOrder = medicalHistory.size();
-        PatientMedicalHistoryEntry e = new PatientMedicalHistoryEntry();
-        e.setPatient(this);
-        e.setEntryOrder(nextOrder);
-        e.setEntry(entry);
-        medicalHistory.add(e);
+        if (entry != null && !entry.trim().isEmpty()) {
+            this.medicalHistory.add(entry);
+        }
     }
 }

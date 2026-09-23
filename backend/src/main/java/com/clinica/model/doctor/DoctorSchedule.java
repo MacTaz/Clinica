@@ -1,14 +1,7 @@
 package com.clinica.model.doctor;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.Table;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import jakarta.persistence.*;
 import java.time.DayOfWeek;
 import java.time.LocalTime;
 
@@ -20,17 +13,23 @@ public class DoctorSchedule {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(optional = false)
+    @JsonIgnore
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "doctor_id", nullable = false)
     private Doctor doctor;
 
     @Enumerated(EnumType.STRING)
-    private DayOfWeek dayOfWeek;
+    @Column(name = "day_of_week", nullable = false, length = 9)
+    private DayOfWeek dayOfWeek; // MONDAY to SUNDAY
 
+    @Column(name = "start_time", nullable = false)
     private LocalTime startTime;
+
+    @Column(name = "end_time", nullable = false)
     private LocalTime endTime;
 
     public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
     public Doctor getDoctor() { return doctor; }
     public void setDoctor(Doctor doctor) { this.doctor = doctor; }
     public DayOfWeek getDayOfWeek() { return dayOfWeek; }
