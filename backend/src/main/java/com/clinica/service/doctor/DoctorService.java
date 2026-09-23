@@ -41,9 +41,8 @@ public class DoctorService {
         Doctor doctor = doctorRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Doctor not found"));
 
-        // Prevent deletion if appointments exist
-        boolean hasAppointments = !appointmentRepository.findByDoctorIdAndAppointmentDate(id, null).isEmpty();
-        if (hasAppointments) {
+        // Prevent deletion if appointments exist — per API_CONTRACT.md: 409 if doctor still has appointments
+        if (appointmentRepository.existsByDoctorId(id)) {
             throw new ResourceInUseException("Cannot delete doctor with existing appointments.");
         }
         doctorRepository.delete(doctor);

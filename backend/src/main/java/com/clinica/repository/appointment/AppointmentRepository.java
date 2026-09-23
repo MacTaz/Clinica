@@ -17,6 +17,9 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
     // Checks if a doctor's slot is already taken
     boolean existsByDoctorIdAndAppointmentDateAndStartTime(Long doctorId, LocalDate appointmentDate, LocalTime startTime);
 
+    // Checks if a doctor has any appointments at all (used before deletion)
+    boolean existsByDoctorId(Long doctorId);
+
     // Checks if a patient is already booked for a specific date and time
     boolean existsByPatientIdAndAppointmentDateAndStartTime(Long patientId, LocalDate appointmentDate, LocalTime startTime);
 }
