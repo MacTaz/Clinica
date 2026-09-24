@@ -4,8 +4,10 @@ import com.clinica.dto.payment.PaymentRequest;
 import com.clinica.dto.payment.PaymentResponse;
 import java.util.List;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@Transactional
 public class PaymentService {
 
     public PaymentResponse recordPayment(Long appointmentId, PaymentRequest request) {

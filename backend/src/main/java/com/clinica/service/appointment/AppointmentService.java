@@ -12,10 +12,12 @@ import com.clinica.repository.appointment.AppointmentRepository;
 import com.clinica.repository.doctor.DoctorRepository;
 import com.clinica.repository.patient.PatientRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.util.List;
 
 @Service
+@Transactional
 public class AppointmentService {
 
     private final AvailabilityService availabilityService;
@@ -61,6 +63,13 @@ public class AppointmentService {
         // Re-check the slot is still open right before saving (400 → 409 per contract)
         if (!availabilityService.isSlotOpen(doctor, request.appointmentDate(), request.startTime())) {
             throw new SlotUnavailableException("This time slot is already booked.");
+        }
+
+        // If ailment specified during appointment booking, update patient ailment and history
+        if (request.ailment() != null && !request.ailment().trim().isEmpty()) {
+            patient.setAilment(request.ailment().trim());
+            patient.addHistoryEntry(request.appointmentDate() + " (" + request.startTime() + " with " + doctor.getName() + "): " + request.ailment().trim());
+            patientRepository.save(patient);
         }
 
         Appointment appointment = new Appointment();

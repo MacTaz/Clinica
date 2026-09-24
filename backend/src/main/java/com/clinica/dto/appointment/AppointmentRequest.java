@@ -8,5 +8,6 @@ public record AppointmentRequest(
         @NotNull Long patientId,
         @NotNull Long doctorId,
         @NotNull LocalDate appointmentDate,
-        @NotNull LocalTime startTime) {
+        @NotNull LocalTime startTime,
+        String ailment) {
 }

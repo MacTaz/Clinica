@@ -1,36 +1,37 @@
 import { useState } from "react";
 import NavBar from "./components/NavBar.jsx";
+import DashboardScreen from "./screens/dashboard/DashboardScreen.jsx";
 import PatientDirectory from "./screens/patients/PatientDirectory.jsx";
-import PatientRegistration from "./screens/patients/PatientRegistration.jsx";
 import DoctorDirectory from "./screens/doctors/DoctorDirectory.jsx";
-import DoctorRegistration from "./screens/doctors/DoctorRegistration.jsx";
-import BookAppointment from "./screens/appointments/BookAppointment.jsx";
 import AppointmentList from "./screens/appointments/AppointmentList.jsx";
 import PaymentsScreen from "./screens/payments/PaymentsScreen.jsx";
 
-// No React Router per the tech stack decision — screens are switched with
-// plain state. Add a new screen by: (1) adding it to SCREENS below,
-// (2) adding a button for it in NavBar.jsx.
 const SCREENS = {
-  patients: PatientDirectory,
-  "register-patient": PatientRegistration,
-  doctors: DoctorDirectory,
-  "register-doctor": DoctorRegistration,
-  "book-appointment": BookAppointment,
+  dashboard: DashboardScreen,
   appointments: AppointmentList,
+  patients: PatientDirectory,
+  doctors: DoctorDirectory,
   payments: PaymentsScreen,
 };
 
 export default function App() {
-  const [screen, setScreen] = useState("patients");
-  const ActiveScreen = SCREENS[screen] ?? PatientDirectory;
+  const [screen, setScreen] = useState("dashboard");
+  const ActiveScreen = SCREENS[screen] ?? DashboardScreen;
 
   return (
-    <div className="app-shell">
+    <div className="app-layout">
       <NavBar current={screen} onNavigate={setScreen} />
-      <main className="app-content">
-        <ActiveScreen />
-      </main>
+      <div className="app-main-area">
+        <header className="app-top-header">
+          <h1 className="app-header-title">Clinica Medika Office - Management System</h1>
+          <p className="app-header-subtitle">
+            Management system for scheduling, appointing, listing patients and doctors, and creating payments.
+          </p>
+        </header>
+        <main className="app-content">
+          <ActiveScreen />
+        </main>
+      </div>
     </div>
   );
 }

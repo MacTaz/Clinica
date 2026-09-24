@@ -7,10 +7,12 @@ import com.clinica.model.doctor.Doctor;
 import com.clinica.repository.appointment.AppointmentRepository;
 import com.clinica.repository.doctor.DoctorRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.util.List;
 
 @Service
+@Transactional
 public class DoctorService {
 
     private final DoctorRepository doctorRepository;

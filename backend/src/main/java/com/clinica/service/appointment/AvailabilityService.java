@@ -6,12 +6,14 @@ import com.clinica.model.doctor.DoctorSchedule;
 import com.clinica.repository.appointment.AppointmentRepository;
 import com.clinica.repository.doctor.DoctorRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 
 @Service
+@Transactional(readOnly = true)
 public class AvailabilityService {
 
     private static final int SLOT_MINUTES = 30;

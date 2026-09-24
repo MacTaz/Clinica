@@ -12,7 +12,7 @@ public class Patient extends Person {
     @Column(nullable = false)
     private String ailment;
 
-    @ElementCollection
+    @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(
             name = "patient_medical_history",
             joinColumns = @JoinColumn(name = "patient_id")

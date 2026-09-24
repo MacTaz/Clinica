@@ -7,5 +7,5 @@ public record PatientRequest(
         @NotBlank String name,
         @Min(0) int age,
         @NotBlank String contact,
-        @NotBlank String ailment) {
+        String ailment) {
 }

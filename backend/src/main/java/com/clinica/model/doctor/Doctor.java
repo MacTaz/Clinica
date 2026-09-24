@@ -18,7 +18,7 @@ public class Doctor extends Person {
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal salary; // Private sensitive field
 
-    @OneToMany(mappedBy = "doctor", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "doctor", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     private List<DoctorSchedule> schedule = new ArrayList<>(); // Weekly schedule
 
     @Override

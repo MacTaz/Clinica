@@ -29,7 +29,8 @@ public class PaymentController {
     @PostMapping("/api/appointments/{id}/payment")
     public ResponseEntity<PaymentResponse> recordPayment(
             @PathVariable("id") Long appointmentId, @RequestBody PaymentRequest request) {
-        // TODO(Agatha): return paymentService.recordPayment(appointmentId, request) instead.
+        // TODO(Agatha): return paymentService.recordPayment(appointmentId, request)
+        // instead.
         PaymentResponse mock = new PaymentResponse(
                 1L, appointmentId, request.amount(), request.method(), "PAID", LocalDateTime.now());
         return ResponseEntity.status(HttpStatus.CREATED).body(mock);

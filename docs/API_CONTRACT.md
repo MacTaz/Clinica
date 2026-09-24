@@ -14,7 +14,7 @@ All request/response bodies are JSON. Dates are `YYYY-MM-DD`, times are
 
 | Method | Endpoint | Body | Success | Notes |
 |---|---|---|---|---|
-| POST | `/patients` | `{name, age, contact, ailment}` | 201 + Patient | |
+| POST | `/patients` | `{name, age, contact, [ailment]}` | 201 + Patient | ailment is optional on initial registration |
 | GET | `/patients` | — | 200 + Patient[] | |
 | POST | `/patients/{id}/history` | `{entry}` | 201 + Patient | appends an entry |
 | DELETE | `/patients/{id}` | — | 204 | cascades history + appointments |
@@ -54,7 +54,7 @@ All request/response bodies are JSON. Dates are `YYYY-MM-DD`, times are
 | Method | Endpoint | Body | Success | Notes |
 |---|---|---|---|---|
 | GET | `/appointments/availability?specializationId={id}&date={yyyy-mm-dd}` | — | 200 + DoctorAvailability[] | |
-| POST | `/appointments` | `{patientId, doctorId, appointmentDate, startTime}` | 201 + Appointment | 400 invalid, 409 slot taken |
+| POST | `/appointments` | `{patientId, doctorId, appointmentDate, startTime, [ailment]}` | 201 + Appointment | 400 invalid, 409 slot taken; sets ailment & history |
 | GET | `/appointments` | — | 200 + Appointment[] | |
 | DELETE | `/appointments/{id}` | — | 204 | also deletes its payment, if any |
 

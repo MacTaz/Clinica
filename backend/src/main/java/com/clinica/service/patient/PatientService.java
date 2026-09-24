@@ -6,10 +6,12 @@ import com.clinica.exception.InvalidRecordDataException;
 import com.clinica.exception.ResourceNotFoundException;
 import com.clinica.model.patient.Patient;
 import com.clinica.repository.patient.PatientRepository;
-import org.springframework.stereotype.Service;
 import java.util.List;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@Transactional
 public class PatientService {
 
     private final PatientRepository patientRepository;
@@ -26,7 +28,7 @@ public class PatientService {
         patient.setName(request.name());
         patient.setAge(request.age()); // setAge validates 0–150 range
         patient.setContact(request.contact());
-        patient.setAilment(request.ailment());
+        patient.setAilment(request.ailment() != null && !request.ailment().trim().isEmpty() ? request.ailment().trim() : "None");
         return toResponse(patientRepository.save(patient));
     }
 
