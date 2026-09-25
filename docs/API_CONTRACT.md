@@ -74,23 +74,37 @@ All request/response bodies are JSON. Dates are `YYYY-MM-DD`, times are
 
 | Method | Endpoint | Body | Success | Notes |
 |---|---|---|---|---|
-| POST | `/appointments/{id}/payment` | `{amount, method}` | 201 + Payment | one per appointment; 404 no such appointment, 409 already paid, 400 invalid amount/method |
+| POST | `/appointments/{id}/payment` | `{amount, method, [receivedBy], [cardLast4], [approvalCode], [gcashReference]}` | 201 + Payment | one per appointment; 404 no such appointment, 409 already paid, 400 invalid amount/method/details |
 | GET | `/payments` | — | 200 + Payment[] | |
 
 **Payment** shape:
 ```json
 { "id": 1, "appointmentId": 1, "amount": 800.00, "method": "CASH",
-  "status": "PAID", "paidAt": "2026-10-02T10:15:00" }
+  "status": "PAID", "paidAt": "2026-10-02T10:15:00",
+  "receivedBy": "Ana", "cardLast4": null, "approvalCode": null, "gcashReference": null }
 ```
 
-`method` is one of `CASH`, `CARD`, `GCASH`. `status` is one of `UNPAID`, `PAID`.
+`method` is one of `CASH`, `CARD`, `GCASH`. `status` is one of `UNPAID`, `PAID`;
+recording a payment always sets `PAID` and `paidAt`.
+
+Method-specific fields. Each method requires its own fields; the fields of
+the other methods must be omitted or `null`. Values are trimmed, and blank
+strings count as omitted.
+
+| method | Required fields | Format |
+|---|---|---|
+| `CASH` | `receivedBy` | staff name, up to 100 characters |
+| `CARD` | `cardLast4`, `approvalCode` | `cardLast4`: exactly 4 digits (never the full card number); `approvalCode`: 1–12 letters or digits, from the POS terminal receipt |
+| `GCASH` | `gcashReference` | exactly 13 digits |
 
 Recording a payment fails with:
 - **404** if the appointment doesn't exist.
 - **409** if the appointment already has a payment.
-- **400** if `amount` is missing or not greater than 0, if `method` is
-  missing or not one of `CASH`, `CARD`, `GCASH` (case-sensitive), or if
-  the body is malformed JSON.
+- **400** if `amount` is missing, not greater than 0, or has more than 8
+  integer digits or 2 decimal places; if `method` is missing or not one of
+  `CASH`, `CARD`, `GCASH` (case-sensitive); if a method-specific field is
+  missing, badly formatted, or belongs to another method; or if the body is
+  malformed JSON.
 
 ## Errors
 
