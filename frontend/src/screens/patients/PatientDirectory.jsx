@@ -8,7 +8,8 @@ export default function PatientDirectory() {
   const [searchTerm, setSearchTerm] = useState("");
   const [error, setError] = useState(null);
   const [showModal, setShowModal] = useState(false);
-  const [formData, setFormData] = useState({ name: "", age: "", contact: "", ailment: "" });
+  const INITIAL_FORM_STATE = { firstName: "", lastName: "", age: "", contact: "", ailment: "" };
+  const [formData, setFormData] = useState(INITIAL_FORM_STATE);
   const [submitting, setSubmitting] = useState(false);
 
   function loadPatients() {
@@ -21,19 +22,24 @@ export default function PatientDirectory() {
     loadPatients();
   }, []);
 
+  function handleCloseModal() {
+    setShowModal(false);
+    setFormData(INITIAL_FORM_STATE);
+  }
+
   async function handleRegister(e) {
     e.preventDefault();
     try {
       setSubmitting(true);
       setError(null);
+      const fullName = `${formData.firstName.trim()} ${formData.lastName.trim()}`.trim();
       await registerPatient({
-        name: formData.name,
+        name: fullName,
         age: parseInt(formData.age, 10),
-        contact: formData.contact,
+        contact: formData.contact.trim(),
         ailment: formData.ailment || "None",
       });
-      setShowModal(false);
-      setFormData({ name: "", age: "", contact: "", ailment: "" });
+      handleCloseModal();
       loadPatients();
     } catch (err) {
       setError(err.message);
@@ -137,18 +143,30 @@ export default function PatientDirectory() {
           <div className="modal-content">
             <div className="modal-header">
               <h3>Register New Patient</h3>
-              <button className="modal-close-btn" onClick={() => setShowModal(false)}>✕</button>
+              <button className="modal-close-btn" onClick={handleCloseModal}>✕</button>
             </div>
             <form onSubmit={handleRegister} className="form-layout">
-              <div className="form-group">
-                <label>Full Name *</label>
-                <input
-                  required
-                  type="text"
-                  placeholder="e.g. Jane Cruz"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                />
+              <div className="form-row">
+                <div className="form-group">
+                  <label>First Name *</label>
+                  <input
+                    required
+                    type="text"
+                    placeholder="e.g. Jane"
+                    value={formData.firstName}
+                    onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Last Name *</label>
+                  <input
+                    required
+                    type="text"
+                    placeholder="e.g. Cruz"
+                    value={formData.lastName}
+                    onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                  />
+                </div>
               </div>
               <div className="form-group">
                 <label>Age *</label>
@@ -166,14 +184,28 @@ export default function PatientDirectory() {
                 <label>Contact Number *</label>
                 <input
                   required
-                  type="text"
+                  type="tel"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   placeholder="e.g. 09171234567"
                   value={formData.contact}
-                  onChange={(e) => setFormData({ ...formData, contact: e.target.value })}
+                  onKeyDown={(e) => {
+                    if (
+                      e.key.length === 1 &&
+                      !/[0-9]/.test(e.key) &&
+                      !(e.ctrlKey || e.metaKey)
+                    ) {
+                      e.preventDefault();
+                    }
+                  }}
+                  onChange={(e) => {
+                    const digits = e.target.value.replace(/\D/g, "");
+                    setFormData({ ...formData, contact: digits });
+                  }}
                 />
               </div>
               <div className="modal-actions">
-                <button type="button" className="secondary-btn" onClick={() => setShowModal(false)}>
+                <button type="button" className="secondary-btn" onClick={handleCloseModal}>
                   Cancel
                 </button>
                 <button type="submit" className="primary-btn" disabled={submitting}>

@@ -58,12 +58,21 @@ set ERROR_CODE=0
 @setlocal
 
 @REM ==== START VALIDATION ====
+@REM Prioritize JDK 21+ required by the project (Spring Boot 4.x)
+for /d %%d in ("%ProgramFiles%\Java\jdk-21*" "%ProgramFiles%\Eclipse Adoptium\jdk-21*" "%ProgramFiles%\Microsoft\jdk-21*" "%ProgramFiles%\Amazon Corretto\jdk-21*" "%ProgramFiles%\Zulu\zulu-21*" "%ProgramFiles%\Java\jdk-22*" "%ProgramFiles%\Java\jdk-23*" "%ProgramFiles%\Java\jdk-24*" "%ProgramFiles%\Java\jdk-25*") do (
+  if exist "%%~d\bin\java.exe" (
+    set "JAVA_HOME=%%~d"
+    goto init
+  )
+)
+
+@REM Fallback to JAVA_HOME if set
 if exist "%JAVA_HOME%\bin\java.exe" goto init
 
-@REM Try to auto-detect latest JDK (prioritizing JDK 21 LTS required by the project)
-for /d %%d in ("%ProgramFiles%\Java\jdk-21*" "%ProgramFiles%\Eclipse Adoptium\jdk-21*" "%ProgramFiles%\Microsoft\jdk-21*" "%ProgramFiles%\Amazon Corretto\jdk-21*" "%ProgramFiles%\Zulu\zulu-21*" "%ProgramFiles%\Java\jdk-22*" "%ProgramFiles%\Java\jdk-23*" "%ProgramFiles%\Java\jdk-24*" "%ProgramFiles%\Java\jdk-25*" "%ProgramFiles%\Java\jdk-17*" "%ProgramFiles%\Eclipse Adoptium\jdk-17*" "%ProgramFiles%\Microsoft\jdk-17*" "%ProgramFiles%\Java\jdk*" "%ProgramFiles%\Eclipse Adoptium\jdk*" "%ProgramFiles%\Microsoft\jdk*") do (
-  if exist "%%d\bin\java.exe" (
-    set "JAVA_HOME=%%d"
+@REM Fallback to other JDK installations
+for /d %%d in ("%ProgramFiles%\Java\jdk-17*" "%ProgramFiles%\Eclipse Adoptium\jdk-17*" "%ProgramFiles%\Microsoft\jdk-17*" "%ProgramFiles%\Java\jdk*" "%ProgramFiles%\Eclipse Adoptium\jdk*" "%ProgramFiles%\Microsoft\jdk*") do (
+  if exist "%%~d\bin\java.exe" (
+    set "JAVA_HOME=%%~d"
     goto init
   )
 )
@@ -81,8 +90,8 @@ if not "%JAVA_EXE_IN_PATH%" == "" (
 
 echo.
 echo Error: A valid JDK could not be located on your system. >&2
-echo Please install JDK 17+ or set the JAVA_HOME environment variable >&2
-echo to point to your JDK installation directory (e.g. C:\Program Files\Java\jdk-17). >&2
+echo Please install JDK 21+ or set the JAVA_HOME environment variable >&2
+echo to point to your JDK installation directory (e.g. C:\Program Files\Java\jdk-21). >&2
 echo.
 goto error
 @REM ==== END VALIDATION ====

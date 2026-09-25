@@ -237,10 +237,24 @@ export default function DoctorDirectory() {
                   <label>Contact Number *</label>
                   <input
                     required
-                    type="text"
+                    type="tel"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     placeholder="e.g. 09181234567"
                     value={formData.contact}
-                    onChange={(e) => setFormData({ ...formData, contact: e.target.value })}
+                    onKeyDown={(e) => {
+                      if (
+                        e.key.length === 1 &&
+                        !/[0-9]/.test(e.key) &&
+                        !(e.ctrlKey || e.metaKey)
+                      ) {
+                        e.preventDefault();
+                      }
+                    }}
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/\D/g, "");
+                      setFormData({ ...formData, contact: digits });
+                    }}
                   />
                 </div>
               </div>

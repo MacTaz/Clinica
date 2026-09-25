@@ -817,3 +817,9 @@ body {
     min-width: 100%;
   }
 }
+
+@media (max-width: 540px) {
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+}
