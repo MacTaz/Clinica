@@ -10,12 +10,19 @@ const PAYMENT_METHODS = ["CASH", "CARD", "GCASH"];
 // Method-specific fields; only the selected method's fields are sent (others must be null)
 const EMPTY_DETAILS = { receivedBy: "", cardLast4: "", approvalCode: "", gcashReference: "" };
 
+// Card installments (bank pays the clinic in full): CARD payments of at least 10,000.00 only
+const INSTALLMENT_MIN_AMOUNT = 10000;
+const INSTALLMENT_TERMS = [3, 6, 12];
+
 const formatAmount = (amount) =>
   `₱${Number(amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const formatDetails = (p) => {
   if (p.method === "CASH" && p.receivedBy) return `Received by: ${p.receivedBy}`;
-  if (p.method === "CARD" && p.cardLast4) return `Card ••••${p.cardLast4}, Approval: ${p.approvalCode}`;
+  if (p.method === "CARD" && p.cardLast4) {
+    const term = p.installmentMonths ? `, ${p.installmentMonths}-month installment` : "";
+    return `Card ••••${p.cardLast4}, Approval: ${p.approvalCode}${term}`;
+  }
   if (p.method === "GCASH" && p.gcashReference) return `Ref: ${p.gcashReference}`;
   return "—";
 };
@@ -30,6 +37,7 @@ export default function PaymentsScreen() {
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState(PAYMENT_METHODS[0]);
   const [details, setDetails] = useState(EMPTY_DETAILS);
+  const [installmentMonths, setInstallmentMonths] = useState(""); // "" = Straight
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState(null);
 
@@ -46,6 +54,12 @@ export default function PaymentsScreen() {
   useEffect(() => {
     fetchAllData();
   }, []);
+
+  // Payment term only applies to CARD payments of at least 10,000; otherwise reset to Straight
+  const installmentAvailable = method === "CARD" && Number(amount) >= INSTALLMENT_MIN_AMOUNT;
+  useEffect(() => {
+    if (!installmentAvailable) setInstallmentMonths("");
+  }, [installmentAvailable]);
 
   const setDetail = (field) => (e) => setDetails((d) => ({ ...d, [field]: e.target.value }));
 
@@ -96,11 +110,13 @@ export default function PaymentsScreen() {
         amount: Number(amount),
         method, // Already uppercase: CASH / CARD / GCASH
         ...methodDetails,
+        ...(installmentAvailable && installmentMonths ? { installmentMonths: Number(installmentMonths) } : {}),
       });
       setSelectedAppointmentId("");
       setAmount("");
       setMethod(PAYMENT_METHODS[0]);
       setDetails(EMPTY_DETAILS);
+      setInstallmentMonths("");
       fetchAllData();
     } catch (err) {
       setFormError(err.message || "Failed to record payment");
@@ -249,6 +265,20 @@ export default function PaymentsScreen() {
                 </div>
               </div>
               <small className="section-subtext">Never enter the full card number — only the last 4 digits are recorded.</small>
+
+              {installmentAvailable && (
+                <div className="form-group">
+                  <label>Payment term</label>
+                  <select value={installmentMonths} onChange={(e) => setInstallmentMonths(e.target.value)}>
+                    <option value="">Straight</option>
+                    {INSTALLMENT_TERMS.map((m) => (
+                      <option key={m} value={m}>
+                        {m} months
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </>
           )}
 
