@@ -74,7 +74,7 @@ All request/response bodies are JSON. Dates are `YYYY-MM-DD`, times are
 
 | Method | Endpoint | Body | Success | Notes |
 |---|---|---|---|---|
-| POST | `/appointments/{id}/payment` | `{amount, method}` | 201 + Payment | one per appointment |
+| POST | `/appointments/{id}/payment` | `{amount, method}` | 201 + Payment | one per appointment; 404 no such appointment, 409 already paid, 400 invalid amount/method |
 | GET | `/payments` | — | 200 + Payment[] | |
 
 **Payment** shape:
@@ -84,6 +84,13 @@ All request/response bodies are JSON. Dates are `YYYY-MM-DD`, times are
 ```
 
 `method` is one of `CASH`, `CARD`, `GCASH`. `status` is one of `UNPAID`, `PAID`.
+
+Recording a payment fails with:
+- **404** if the appointment doesn't exist.
+- **409** if the appointment already has a payment.
+- **400** if `amount` is missing or not greater than 0, if `method` is
+  missing or not one of `CASH`, `CARD`, `GCASH` (case-sensitive), or if
+  the body is malformed JSON.
 
 ## Errors
 
