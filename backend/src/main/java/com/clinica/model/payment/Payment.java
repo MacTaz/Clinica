@@ -39,6 +39,19 @@ public class Payment {
 
     private LocalDateTime paidAt;
 
+    // Method-specific details: only the fields for the payment's method are set (see schema.sql)
+    @Column(name = "received_by", length = 100)
+    private String receivedBy; // CASH
+
+    @Column(name = "card_last4", length = 4)
+    private String cardLast4; // CARD: last 4 digits only, never the full card number
+
+    @Column(name = "approval_code", length = 12)
+    private String approvalCode; // CARD: from the POS terminal receipt
+
+    @Column(name = "gcash_reference", length = 13)
+    private String gcashReference; // GCASH
+
     public void markPaid(PaymentMethod method) {
         this.method = method;
         this.status = PaymentStatus.PAID;
@@ -53,4 +66,12 @@ public class Payment {
     public PaymentMethod getMethod() { return method; }
     public PaymentStatus getStatus() { return status; }
     public LocalDateTime getPaidAt() { return paidAt; }
+    public String getReceivedBy() { return receivedBy; }
+    public void setReceivedBy(String receivedBy) { this.receivedBy = receivedBy; }
+    public String getCardLast4() { return cardLast4; }
+    public void setCardLast4(String cardLast4) { this.cardLast4 = cardLast4; }
+    public String getApprovalCode() { return approvalCode; }
+    public void setApprovalCode(String approvalCode) { this.approvalCode = approvalCode; }
+    public String getGcashReference() { return gcashReference; }
+    public void setGcashReference(String gcashReference) { this.gcashReference = gcashReference; }
 }
