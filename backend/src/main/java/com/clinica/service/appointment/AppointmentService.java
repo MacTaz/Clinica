@@ -65,6 +65,12 @@ public class AppointmentService {
             throw new SlotUnavailableException("This time slot is already booked.");
         }
 
+        // Prevent the same patient from being double-booked at the same date + time
+        if (appointmentRepository.existsByPatientIdAndAppointmentDateAndStartTime(
+                request.patientId(), request.appointmentDate(), request.startTime())) {
+            throw new SlotUnavailableException("Patient already has an appointment at this date and time.");
+        }
+
         // If ailment specified during appointment booking, update patient ailment and history
         if (request.ailment() != null && !request.ailment().trim().isEmpty()) {
             patient.setAilment(request.ailment().trim());

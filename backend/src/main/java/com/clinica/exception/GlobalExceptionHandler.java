@@ -3,6 +3,8 @@ package com.clinica.exception;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -16,6 +18,8 @@ import tools.jackson.databind.exc.MismatchedInputException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler(InvalidRecordDataException.class)
     public ResponseEntity<ApiError> handleInvalidData(InvalidRecordDataException ex) {
@@ -87,9 +91,12 @@ public class GlobalExceptionHandler {
                 .body(new ApiError(409, "Request conflicts with existing data."));
     }
 
+    // Catches anything not handled above. Logs the real cause server-side but
+    // returns a safe generic message so internal details never reach the client.
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiError> handleGeneralException(Exception ex) {
+        log.error("Unhandled exception", ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiError(500, ex.getMessage() != null ? ex.getMessage() : "An unexpected error occurred"));
+                .body(new ApiError(500, "An unexpected error occurred."));
     }
 }

@@ -163,7 +163,6 @@ export default function PaymentsScreen() {
         {formError && <ErrorBanner message={formError} />}
 
         <form onSubmit={handleRecordPayment} className="form-layout">
-          {/* Placeholder appointment picker — to be replaced by Mico's appointment picker */}
           <div className="form-group">
             <label>Appointment *</label>
             <select

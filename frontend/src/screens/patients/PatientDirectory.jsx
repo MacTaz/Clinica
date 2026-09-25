@@ -204,6 +204,16 @@ export default function PatientDirectory() {
                   }}
                 />
               </div>
+              <div className="form-group">
+                <label>Ailment / Chief Complaint <span className="optional-label">(optional)</span></label>
+                <input
+                  type="text"
+                  placeholder="e.g. Hypertension, Diabetes, Skin rash"
+                  value={formData.ailment}
+                  onChange={(e) => setFormData({ ...formData, ailment: e.target.value })}
+                />
+                <small className="section-subtext">Can also be set or updated when booking an appointment.</small>
+              </div>
               <div className="modal-actions">
                 <button type="button" className="secondary-btn" onClick={handleCloseModal}>
                   Cancel

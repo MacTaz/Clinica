@@ -1,52 +1,116 @@
 package com.clinica.service.doctor;
 
-import com.clinica.exception.InvalidRecordDataException;
+import com.clinica.dto.doctor.DoctorRequest;
+import com.clinica.dto.doctor.DoctorResponse;
+import com.clinica.dto.specialization.SpecializationDto;
 import com.clinica.exception.ResourceInUseException;
 import com.clinica.exception.ResourceNotFoundException;
 import com.clinica.model.doctor.Doctor;
+import com.clinica.model.doctor.DoctorSchedule;
+import com.clinica.model.specialization.Specialization;
 import com.clinica.repository.appointment.AppointmentRepository;
 import com.clinica.repository.doctor.DoctorRepository;
+import com.clinica.repository.specialization.SpecializationRepository;
+import java.time.DayOfWeek;
+import java.time.LocalTime;
+import java.util.List;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import java.math.BigDecimal;
-import java.util.List;
 
+/**
+ * Owns all doctor business logic: registration (including specialization
+ * lookup and schedule mapping), listing, and deletion.  The controller layer
+ * only routes HTTP — it never touches repositories or entities directly.
+ */
 @Service
 @Transactional
 public class DoctorService {
 
     private final DoctorRepository doctorRepository;
     private final AppointmentRepository appointmentRepository;
+    private final SpecializationRepository specializationRepository;
 
-    public DoctorService(DoctorRepository doctorRepository, AppointmentRepository appointmentRepository) {
+    public DoctorService(DoctorRepository doctorRepository,
+                         AppointmentRepository appointmentRepository,
+                         SpecializationRepository specializationRepository) {
         this.doctorRepository = doctorRepository;
         this.appointmentRepository = appointmentRepository;
+        this.specializationRepository = specializationRepository;
     }
 
-    public Doctor registerDoctor(Doctor doctor) {
-        if (doctor.getSalary() == null || doctor.getSalary().compareTo(BigDecimal.ZERO) < 0) {
-            throw new InvalidRecordDataException("Salary cannot be negative."); // Validates salary
-        }
-        if (doctor.getSchedule() == null || doctor.getSchedule().isEmpty()) {
-            throw new InvalidRecordDataException("Doctor must have a weekly availability schedule.");
-        }
-        // Link bidirectional schedule relationships
-        doctor.getSchedule().forEach(schedule -> schedule.setDoctor(doctor));
-        return doctorRepository.save(doctor);
+    /**
+     * Maps the incoming DTO to a Doctor entity, persists it, and returns
+     * a response DTO.  All DTO-level constraints (@NotBlank, @NotEmpty, etc.)
+     * are already validated by @Valid in the controller before this runs.
+     */
+    public DoctorResponse registerDoctor(DoctorRequest request) {
+        Specialization spec = specializationRepository.findById(request.specializationId())
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Specialization not found with ID: " + request.specializationId()));
+
+        Doctor doctor = new Doctor();
+        doctor.setName(request.name());
+        doctor.setAge(request.age());             // Person.setAge validates 0–150
+        doctor.setContact(request.contact());
+        doctor.setSpecialization(spec);
+        doctor.setSalary(request.salary());       // Doctor.setSalary validates >= 0
+
+        List<DoctorSchedule> schedules = request.schedules().stream().map(s -> {
+            DoctorSchedule schedule = new DoctorSchedule();
+            schedule.setDayOfWeek(DayOfWeek.valueOf(s.dayOfWeek().toUpperCase()));
+            schedule.setStartTime(LocalTime.parse(s.startTime()));
+            schedule.setEndTime(LocalTime.parse(s.endTime()));
+            return schedule;
+        }).collect(Collectors.toList());
+
+        // setSchedule links the bidirectional doctor <-> schedule relationship
+        doctor.setSchedule(schedules);
+        return toResponse(doctorRepository.save(doctor));
     }
 
-    public List<Doctor> getAllDoctors() {
-        return doctorRepository.findAll();
+    @Transactional(readOnly = true)
+    public List<DoctorResponse> getAllDoctors() {
+        return doctorRepository.findAll().stream()
+                .map(this::toResponse)
+                .collect(Collectors.toList());
     }
 
     public void deleteDoctor(Long id) {
         Doctor doctor = doctorRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Doctor not found"));
 
-        // Prevent deletion if appointments exist — per API_CONTRACT.md: 409 if doctor still has appointments
+        // Per API_CONTRACT.md: 409 if doctor still has appointments
         if (appointmentRepository.existsByDoctorId(id)) {
             throw new ResourceInUseException("Cannot delete doctor with existing appointments.");
         }
         doctorRepository.delete(doctor);
+    }
+
+    // Converts a saved Doctor entity to the response DTO sent to the frontend.
+    private DoctorResponse toResponse(Doctor doctor) {
+        SpecializationDto specDto = new SpecializationDto(
+                doctor.getSpecialization().getId(),
+                doctor.getSpecialization().getName()
+        );
+
+        List<DoctorResponse.ScheduleBlock> scheduleBlocks = doctor.getSchedule().stream()
+                .map(s -> new DoctorResponse.ScheduleBlock(
+                        s.getId(),
+                        s.getDayOfWeek().name(),
+                        s.getStartTime().toString(),
+                        s.getEndTime().toString()
+                ))
+                .collect(Collectors.toList());
+
+        return new DoctorResponse(
+                doctor.getId(),
+                doctor.getName(),
+                doctor.getAge(),
+                doctor.getContact(),
+                specDto,
+                doctor.getSalary(),
+                scheduleBlocks
+        );
     }
 }

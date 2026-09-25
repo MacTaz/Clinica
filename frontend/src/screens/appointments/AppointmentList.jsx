@@ -49,6 +49,14 @@ export default function AppointmentList() {
       .catch((err) => setError(err.message));
   };
 
+  // Lightweight refresh — only appointments change after a book/cancel action.
+  // Patients, specializations, and doctors are static during a session.
+  const refreshAppointments = () => {
+    getAppointments()
+      .then(setAppointments)
+      .catch((err) => setError(err.message));
+  };
+
   useEffect(() => {
     fetchAllData();
   }, []);
@@ -133,7 +141,7 @@ export default function AppointmentList() {
         ailment: bookingAilment.trim(),
       });
       setShowModal(false);
-      fetchAllData();
+      refreshAppointments();
     } catch (err) {
       setBookingError(err.message || "Failed to book appointment");
     } finally {
@@ -146,7 +154,7 @@ export default function AppointmentList() {
     setCancelingId(id);
     try {
       await cancelAppointment(id);
-      fetchAllData();
+      refreshAppointments();
     } catch (err) {
       setError(err.message);
     } finally {

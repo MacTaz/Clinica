@@ -14,11 +14,32 @@ function formatStatusClass(status) {
   return "status-neutral";
 }
 
+// Day names matching Java's DayOfWeek enum (Sunday = index 0)
+const JAVA_DAY_NAMES = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
+
 function getDoctorScheduleSummary(schedules) {
   if (!schedules || schedules.length === 0) return "No schedule set";
   return schedules
     .map((s) => `${s.dayOfWeek?.substring(0, 3)} ${(s.startTime || "").substring(0, 5)}-${(s.endTime || "").substring(0, 5)}`)
     .join(", ");
+}
+
+/**
+ * Returns "On Duty" if the doctor has a schedule block for today that
+ * spans the current local time, otherwise "Off Duty".
+ */
+function getDoctorDutyStatus(schedules) {
+  if (!schedules || schedules.length === 0) return "Off Duty";
+  const now = new Date();
+  const todayName = JAVA_DAY_NAMES[now.getDay()];
+  const currentTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  const isOnDuty = schedules.some((s) => {
+    if (s.dayOfWeek !== todayName) return false;
+    const start = (s.startTime || "").substring(0, 5);
+    const end = (s.endTime || "").substring(0, 5);
+    return currentTime >= start && currentTime < end;
+  });
+  return isOnDuty ? "On Duty" : "Off Duty";
 }
 
 export default function DashboardScreen() {
@@ -61,9 +82,12 @@ export default function DashboardScreen() {
 
   const patientMap = new Map(patients.map((p) => [p.id, p]));
 
-  // Calculate metrics from real data
-  const totalVisits = appointments.length;
-  const successfulAppts = appointments.length; // Active confirmed appointments
+  // Today's metrics — filter by today's date only
+  const todayStr = new Date().toISOString().split("T")[0];
+  const todayAppointments = appointments.filter((a) => a.appointmentDate === todayStr);
+  const totalVisits = todayAppointments.length;
+  const successfulAppts = todayAppointments.length; // All existing appointments are confirmed
+  // canceledAppts is always 0 because canceling an appointment deletes it from the DB
   const canceledAppts = 0;
 
   if (loading) {
@@ -157,14 +181,20 @@ export default function DashboardScreen() {
                 </tr>
               </thead>
               <tbody>
-                {doctors.map((doc) => (
-                  <tr key={doc.id}>
-                    <td className="cell-doctor-name">{doc.name}</td>
-                    <td>{doc.contact || "—"}</td>
-                    <td>{getDoctorScheduleSummary(doc.schedules)}</td>
-                    <td className="cell-status status-confirmed">Currently In</td>
-                  </tr>
-                ))}
+                {doctors.map((doc) => {
+                  const dutyStatus = getDoctorDutyStatus(doc.schedules);
+                  const isOnDuty = dutyStatus === "On Duty";
+                  return (
+                    <tr key={doc.id}>
+                      <td className="cell-doctor-name">{doc.name}</td>
+                      <td>{doc.contact || "—"}</td>
+                      <td>{getDoctorScheduleSummary(doc.schedules)}</td>
+                      <td className={`cell-status ${isOnDuty ? "status-confirmed" : "status-neutral"}`}>
+                        {dutyStatus}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
