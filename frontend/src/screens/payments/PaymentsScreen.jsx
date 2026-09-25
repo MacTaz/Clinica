@@ -69,6 +69,7 @@ export default function PaymentsScreen() {
 
   // One payment per appointment — already-paid appointments are listed but disabled
   const paidAppointmentIds = new Set(payments.map((p) => p.appointmentId));
+  const hasUnpaidAppointment = appointments.some((a) => !paidAppointmentIds.has(a.id));
 
   return (
     <section className="section-container">
@@ -88,64 +89,68 @@ export default function PaymentsScreen() {
         {formError && <ErrorBanner message={formError} />}
 
         <form onSubmit={handleRecordPayment} className="form-layout">
-          {/* Placeholder appointment picker — to be replaced by Mico's appointment picker */}
-          <div className="form-group">
-            <label>Appointment *</label>
-            {appointments.length === 0 ? (
-              <div className="warn-box">
-                <p>No appointments yet. Book one in the <strong>Appointments</strong> tab first.</p>
+          {!hasUnpaidAppointment ? (
+            <p className="empty-notice">
+              {appointments.length === 0
+                ? "No appointments yet. Book one in the Appointments tab to record a payment."
+                : "All appointments are already paid. Book a new appointment to record a payment."}
+            </p>
+          ) : (
+            <>
+              {/* Placeholder appointment picker — to be replaced by Mico's appointment picker */}
+              <div className="form-group">
+                <label>Appointment *</label>
+                <select
+                  value={selectedAppointmentId}
+                  onChange={(e) => setSelectedAppointmentId(e.target.value)}
+                >
+                  <option value="">Select an appointment...</option>
+                  {appointments.map((a) => {
+                    const paid = paidAppointmentIds.has(a.id);
+                    return (
+                      <option key={a.id} value={a.id} disabled={paid}>
+                        #{a.id} — {a.patient?.name} with {a.doctor?.name}, {a.appointmentDate}{" "}
+                        {a.startTime?.substring(0, 5)}
+                        {paid ? " (paid)" : ""}
+                      </option>
+                    );
+                  })}
+                </select>
               </div>
-            ) : (
-              <select
-                value={selectedAppointmentId}
-                onChange={(e) => setSelectedAppointmentId(e.target.value)}
-              >
-                <option value="">Select an appointment...</option>
-                {appointments.map((a) => {
-                  const paid = paidAppointmentIds.has(a.id);
-                  return (
-                    <option key={a.id} value={a.id} disabled={paid}>
-                      #{a.id} — {a.patient?.name} with {a.doctor?.name}, {a.appointmentDate}{" "}
-                      {a.startTime?.substring(0, 5)}
-                      {paid ? " (paid)" : ""}
-                    </option>
-                  );
-                })}
-              </select>
-            )}
-          </div>
 
-          <div className="form-row">
-            <div className="form-group">
-              <label>Amount (₱) *</label>
-              <input
-                required
-                type="number"
-                min="0.01"
-                step="0.01"
-                placeholder="e.g. 800.00"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-              />
-            </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Amount (₱) *</label>
+                  <input
+                    required
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    placeholder="e.g. 800.00"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                  />
+                </div>
 
-            <div className="form-group">
-              <label>Payment Method *</label>
-              <select value={method} onChange={(e) => setMethod(e.target.value)}>
-                {PAYMENT_METHODS.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
+                <div className="form-group">
+                  <label>Payment Method *</label>
+                  <select value={method} onChange={(e) => setMethod(e.target.value)}>
+                    {PAYMENT_METHODS.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </>
+          )}
 
           <div className="modal-actions">
             <button
               type="submit"
               className="primary-btn"
-              disabled={submitting || !selectedAppointmentId || !amount}
+              disabled={submitting || !hasUnpaidAppointment || !selectedAppointmentId || !amount}
             >
               {submitting ? "Recording..." : "Record Payment"}
             </button>
