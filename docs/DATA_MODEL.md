@@ -68,6 +68,7 @@ Unique per doctor+date+start_time, and per patient+date+start_time.
 | card_last4 | CHAR(4) | CARD only: last 4 digits of the card, never the full number |
 | approval_code | VARCHAR(12) | CARD only: 1–12 letters/digits from the POS terminal receipt |
 | gcash_reference | CHAR(13) | GCASH only: 13-digit GCash reference number |
+| installment_months | TINYINT | CARD with amount >= 10,000.00 only: 3, 6 or 12; NULL = straight payment. The bank pays the clinic in full, so the row is still one full PAID payment |
 
 Named CHECK constraints (the database copy of the Java validation):
 - `chk_payments_method`: method is CASH, CARD or GCASH.
@@ -75,6 +76,8 @@ Named CHECK constraints (the database copy of the Java validation):
 - `chk_payments_paid_at`: PAID rows have paid_at; UNPAID rows don't.
 - `chk_payments_method_details`: each method has exactly its own detail
   columns filled in, in the formats above; the others are null.
+- `chk_payments_installment`: installment_months is NULL, or 3/6/12 on a
+  CARD payment of at least 10,000.00.
 
 Databases created before these columns and constraints existed are
 upgraded in place by guarded `ALTER` statements at the end of `schema.sql`

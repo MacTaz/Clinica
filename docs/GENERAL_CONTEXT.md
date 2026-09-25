@@ -17,6 +17,7 @@ This document serves as the high-level technical reference and system context fo
   - React 19 + Vite
   - Plain JavaScript (JSX)
   - Styling: Vanilla CSS with design system tokens in `src/styles/index.css`
+  - `qrcode.react`: renders the demo-only sample GCash QR on the Payments screen
   - Base URL: `http://localhost:5173`
 - **Documentation Sources of Truth**:
   - [`API_CONTRACT.md`](file:///c:/Users/micot/Desktop/Projects/ClinicSystem/docs/API_CONTRACT.md) — Exact endpoints, request/response DTO schemas, and HTTP error codes.
@@ -83,6 +84,8 @@ ClinicSystem/
 
 5. **Payments** (`payments` table):
    - Fields: `id`, `appointment_id` (FK, unique), `amount`, `method` (`CASH`, `CARD`, `GCASH`), `status` (`UNPAID`, `PAID`), `paid_at`.
+   - Method details: `received_by` (CASH), `card_last4` + `approval_code` (CARD; never the full card number), `gcash_reference` (GCASH).
+   - `installment_months` (3, 6, 12): card installments for CARD payments of at least 10,000.00. The bank pays the clinic in full, so it is still one PAID payment per appointment.
 
 ---
 
