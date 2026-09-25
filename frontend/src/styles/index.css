@@ -193,6 +193,36 @@ body {
   color: var(--text-primary);
 }
 
+/* Collapsible dash-card: <details class="dash-card collapsible-card"> + <summary class="dash-card-title"> */
+.collapsible-card > summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.collapsible-card > summary::-webkit-details-marker {
+  display: none;
+}
+
+.collapsible-card > summary::before {
+  content: "▸";
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  transition: transform 0.15s ease;
+}
+
+.collapsible-card[open] > summary {
+  margin-bottom: 1.25rem;
+}
+
+.collapsible-card[open] > summary::before {
+  transform: rotate(90deg);
+}
+
 .table-responsive {
   width: 100%;
   overflow-x: auto;
