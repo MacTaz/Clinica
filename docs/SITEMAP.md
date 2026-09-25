@@ -51,11 +51,14 @@ Clinica Management System
 │
 └── Payments
     ├── Record Payment Action
-    │   ├── Select Appointment
+    │   ├── Select Appointment (only appointments without a payment; "No unpaid appointments" when none)
     │   ├── Amount & Payment Method (`CASH`, `CARD`, `GCASH`)
+    │   ├── Method fields: CASH → Received by; CARD → Card last 4 digits + Approval code;
+    │   │   GCASH → sample QR (demo only, not a real payment) + GCash reference number
+    │   ├── Payment term (CARD with amount ≥ 10,000 only): Straight, 3, 6 or 12 months
     │   └── Submit action (`POST /api/appointments/{id}/payment`)
-    └── Payments History Table
-        └── Columns: ID, Appointment ID, Amount, Method, Status, Paid At
+    └── Payments History (collapsible, collapsed by default, header shows the count)
+        └── Columns: Appointment ID, Amount, Method, Details, Status, Paid At
 ```
 
 ---
@@ -68,7 +71,7 @@ Clinica Management System
 | **Appointments** | `src/screens/appointments/AppointmentList.jsx` | `GET /api/appointments`<br>`GET /api/appointments/availability`<br>`POST /api/appointments`<br>`DELETE /api/appointments/{id}` | Schedule manager with live slot availability checker and booking modal. |
 | **Patients** | `src/screens/patients/PatientDirectory.jsx` | `GET /api/patients`<br>`POST /api/patients`<br>`DELETE /api/patients/{id}` | Patient records directory with modal for new patient registrations. |
 | **Doctors** | `src/screens/doctors/DoctorDirectory.jsx` | `GET /api/doctors`<br>`GET /api/specializations`<br>`POST /api/doctors`<br>`DELETE /api/doctors/{id}` | Clinical staff directory with schedule viewer and doctor registration modal. |
-| **Payments** | `src/screens/payments/PaymentsScreen.jsx` | `GET /api/payments`<br>`POST /api/appointments/{id}/payment` | Billing and receipt management. |
+| **Payments** | `src/screens/payments/PaymentsScreen.jsx` | `GET /api/payments`<br>`GET /api/appointments`<br>`POST /api/appointments/{id}/payment` | Billing and receipt management. |
 
 ---
 
