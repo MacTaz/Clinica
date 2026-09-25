@@ -58,26 +58,33 @@ set ERROR_CODE=0
 @setlocal
 
 @REM ==== START VALIDATION ====
-if not "%JAVA_HOME%" == "" goto OkJHome
-
-echo.
-echo Error: JAVA_HOME not found in your environment. >&2
-echo Please set the JAVA_HOME variable in your environment to match the >&2
-echo location of your Java installation. >&2
-echo.
-goto error
-
-:OkJHome
 if exist "%JAVA_HOME%\bin\java.exe" goto init
 
+@REM Try to auto-detect latest JDK (prioritizing JDK 21 LTS required by the project)
+for /d %%d in ("%ProgramFiles%\Java\jdk-21*" "%ProgramFiles%\Eclipse Adoptium\jdk-21*" "%ProgramFiles%\Microsoft\jdk-21*" "%ProgramFiles%\Amazon Corretto\jdk-21*" "%ProgramFiles%\Zulu\zulu-21*" "%ProgramFiles%\Java\jdk-22*" "%ProgramFiles%\Java\jdk-23*" "%ProgramFiles%\Java\jdk-24*" "%ProgramFiles%\Java\jdk-25*" "%ProgramFiles%\Java\jdk-17*" "%ProgramFiles%\Eclipse Adoptium\jdk-17*" "%ProgramFiles%\Microsoft\jdk-17*" "%ProgramFiles%\Java\jdk*" "%ProgramFiles%\Eclipse Adoptium\jdk*" "%ProgramFiles%\Microsoft\jdk*") do (
+  if exist "%%d\bin\java.exe" (
+    set "JAVA_HOME=%%d"
+    goto init
+  )
+)
+
+@REM Try to auto-detect JAVA_HOME from java.exe in PATH
+for %%i in (java.exe) do set "JAVA_EXE_IN_PATH=%%~$PATH:i"
+if not "%JAVA_EXE_IN_PATH%" == "" (
+  for %%i in ("%JAVA_EXE_IN_PATH%\..\..") do (
+    if exist "%%~fi\bin\java.exe" (
+      set "JAVA_HOME=%%~fi"
+      goto init
+    )
+  )
+)
+
 echo.
-echo Error: JAVA_HOME is set to an invalid directory. >&2
-echo JAVA_HOME = "%JAVA_HOME%" >&2
-echo Please set the JAVA_HOME variable in your environment to match the >&2
-echo location of your Java installation. >&2
+echo Error: A valid JDK could not be located on your system. >&2
+echo Please install JDK 17+ or set the JAVA_HOME environment variable >&2
+echo to point to your JDK installation directory (e.g. C:\Program Files\Java\jdk-17). >&2
 echo.
 goto error
-
 @REM ==== END VALIDATION ====
 
 :init
