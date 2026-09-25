@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { getDoctors, registerDoctor, deleteDoctor } from "../../api/doctors.js";
 import { getSpecializations } from "../../api/specializations.js";
+import { getDoctorScheduleStatus, setDoctorScheduleStatus, statusToSlug, STATUS_OPTIONS } from "../../utils/doctorStatus.js";
 import LoadingSpinner from "../../components/LoadingSpinner.jsx";
 import ErrorBanner from "../../components/ErrorBanner.jsx";
 
@@ -12,6 +13,45 @@ const DEFAULT_SCHEDULE_ROW = {
   endTime: "12:00",
 };
 
+/**
+ * Detects duplicate or overlapping schedule rows for a doctor on the same day.
+ * Returns { conflicts: Set<number>, conflictMessages: string[] }
+ */
+function findScheduleConflicts(schedules) {
+  const conflicts = new Set();
+  const conflictMessages = [];
+
+  for (let i = 0; i < schedules.length; i++) {
+    const s1 = schedules[i];
+    if (!s1 || !s1.startTime || !s1.endTime) continue;
+
+    for (let j = i + 1; j < schedules.length; j++) {
+      const s2 = schedules[j];
+      if (!s2 || !s2.startTime || !s2.endTime) continue;
+
+      if (s1.dayOfWeek === s2.dayOfWeek) {
+        // Overlap condition: start1 < end2 && start2 < end1
+        const overlaps = s1.startTime < s2.endTime && s2.startTime < s1.endTime;
+        if (overlaps) {
+          conflicts.add(i);
+          conflicts.add(j);
+          if (s1.startTime === s2.startTime && s1.endTime === s2.endTime) {
+            conflictMessages.push(
+              `Duplicate schedule on ${s1.dayOfWeek} (${s1.startTime}–${s1.endTime}): Row #${i + 1} and Row #${j + 1} cannot have the exact same schedule.`
+            );
+          } else {
+            conflictMessages.push(
+              `Overlapping schedule on ${s1.dayOfWeek}: Row #${i + 1} (${s1.startTime}–${s1.endTime}) and Row #${j + 1} (${s2.startTime}–${s2.endTime}) overlap. Schedules cannot repeat or overlap.`
+            );
+          }
+        }
+      }
+    }
+  }
+
+  return { conflicts, conflictMessages };
+}
+
 export default function DoctorDirectory() {
   const [doctors, setDoctors] = useState(null);
   const [specializations, setSpecializations] = useState([]);
@@ -19,24 +59,32 @@ export default function DoctorDirectory() {
   const [modalError, setModalError] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [, setStatusVersion] = useState(0);
+
+  useEffect(() => {
+    function onStatusChange() {
+      setStatusVersion((v) => v + 1);
+    }
+    window.addEventListener("clinica-doctor-status-change", onStatusChange);
+    return () => window.removeEventListener("clinica-doctor-status-change", onStatusChange);
+  }, []);
 
   const [formData, setFormData] = useState({
-    name: "",
+    firstName: "",
+    lastName: "",
     age: "",
     contact: "",
-    specializationId: "",
-    salary: "",
     schedules: [{ ...DEFAULT_SCHEDULE_ROW }],
   });
 
+  const { conflicts: scheduleConflicts, conflictMessages: scheduleConflictMessages } =
+    findScheduleConflicts(formData.schedules);
+
   function loadData() {
-    Promise.all([getDoctors(), getSpecializations()])
+    Promise.all([getDoctors(), getSpecializations().catch(() => [])])
       .then(([docs, specs]) => {
         setDoctors(docs);
         setSpecializations(specs);
-        if (specs.length > 0 && !formData.specializationId) {
-          setFormData((prev) => ({ ...prev, specializationId: specs[0].id }));
-        }
       })
       .catch((err) => setError(err.message));
   }
@@ -46,10 +94,21 @@ export default function DoctorDirectory() {
   }, []);
 
   function handleAddScheduleRow() {
-    setFormData((prev) => ({
-      ...prev,
-      schedules: [...prev.schedules, { ...DEFAULT_SCHEDULE_ROW }],
-    }));
+    setFormData((prev) => {
+      const usedDays = new Set(prev.schedules.map((s) => s.dayOfWeek));
+      const nextUnusedDay = DAYS_OF_WEEK.find((d) => !usedDays.has(d)) || "MONDAY";
+      return {
+        ...prev,
+        schedules: [
+          ...prev.schedules,
+          {
+            dayOfWeek: nextUnusedDay,
+            startTime: "09:00",
+            endTime: "12:00",
+          },
+        ],
+      };
+    });
   }
 
   function handleRemoveScheduleRow(index) {
@@ -71,11 +130,10 @@ export default function DoctorDirectory() {
   function handleOpenModal() {
     setModalError(null);
     setFormData({
-      name: "",
+      firstName: "",
+      lastName: "",
       age: "",
       contact: "",
-      specializationId: specializations[0]?.id || "",
-      salary: "",
       schedules: [{ ...DEFAULT_SCHEDULE_ROW }],
     });
     setShowModal(true);
@@ -83,6 +141,14 @@ export default function DoctorDirectory() {
 
   async function handleRegister(e) {
     e.preventDefault();
+    const cleanFirst = formData.firstName.trim();
+    const cleanLast = formData.lastName.trim();
+
+    if (!cleanFirst || !cleanLast) {
+      setModalError("Please provide both First Name and Last Name.");
+      return;
+    }
+
     if (!formData.schedules || formData.schedules.length === 0) {
       setModalError("Please provide at least one weekly schedule block.");
       return;
@@ -96,15 +162,27 @@ export default function DoctorDirectory() {
       }
     }
 
+    // Validate that no duplicate or overlapping schedules exist on the same day
+    const { conflictMessages } = findScheduleConflicts(formData.schedules);
+    if (conflictMessages.length > 0) {
+      setModalError(conflictMessages[0]);
+      return;
+    }
+
+    // Format doctor's name with title "Dr." on the record
+    const formattedName = cleanFirst.toLowerCase().startsWith("dr.") || cleanFirst.toLowerCase().startsWith("dr ")
+      ? `${cleanFirst} ${cleanLast}`.trim()
+      : `Dr. ${cleanFirst} ${cleanLast}`.trim();
+
     try {
       setSubmitting(true);
       setModalError(null);
       await registerDoctor({
-        name: formData.name,
+        name: formattedName,
         age: parseInt(formData.age, 10),
         contact: formData.contact,
-        specializationId: parseInt(formData.specializationId, 10),
-        salary: parseFloat(formData.salary),
+        specializationId: specializations[0]?.id || 1,
+        salary: 0,
         schedules: formData.schedules.map((s) => ({
           dayOfWeek: s.dayOfWeek,
           startTime: s.startTime.length === 5 ? `${s.startTime}:00` : s.startTime,
@@ -138,7 +216,7 @@ export default function DoctorDirectory() {
       <div className="section-header-row">
         <div>
           <h2>Doctors Directory</h2>
-          <p className="section-subtext">Manage clinical staff, specialties, and weekly duty schedules.</p>
+          <p className="section-subtext">Manage clinical staff and weekly duty schedules.</p>
         </div>
         <button className="primary-btn" onClick={handleOpenModal}>
           + Register Doctor
@@ -153,28 +231,33 @@ export default function DoctorDirectory() {
         ) : (
           <div className="table-responsive">
             <table className="dash-table">
+              <colgroup>
+                <col style={{ width: "22%" }} />
+                <col style={{ width: "10%" }} />
+                <col style={{ width: "18%" }} />
+                <col style={{ width: "22%" }} />
+                <col style={{ width: "18%" }} />
+                <col style={{ width: "10%" }} />
+              </colgroup>
               <thead>
                 <tr>
                   <th>Name</th>
-                  <th>Specialization</th>
                   <th>Age</th>
                   <th>Contact</th>
-                  <th>Salary</th>
                   <th>Weekly Schedules</th>
-                  <th className="th-status">Actions</th>
+                  <th>Availability Status</th>
+                  <th className="th-actions">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {doctors.map((d) => (
                   <tr key={d.id}>
                     <td className="cell-doctor-name">{d.name}</td>
-                    <td><span className="spec-badge">{d.specialization?.name || "General"}</span></td>
                     <td>{d.age}</td>
                     <td>{d.contact}</td>
-                    <td>₱{Number(d.salary).toLocaleString()}</td>
                     <td>
                       {d.schedules && d.schedules.length > 0 ? (
-                        <div className="schedules-list">
+                        <div className="schedules-vertical-list">
                           {d.schedules.map((s, idx) => (
                             <div key={idx} className="schedule-pill">
                               <strong>{s.dayOfWeek?.substring(0, 3)}:</strong> {s.startTime?.substring(0, 5)}–{s.endTime?.substring(0, 5)}
@@ -183,6 +266,37 @@ export default function DoctorDirectory() {
                         </div>
                       ) : (
                         <span className="text-muted">No schedule</span>
+                      )}
+                    </td>
+                    <td>
+                      {d.schedules && d.schedules.length > 0 ? (
+                        <div className="status-vertical-list">
+                          {d.schedules.map((s, idx) => {
+                            const currentStatus = getDoctorScheduleStatus(d, s, idx);
+                            const slug = statusToSlug(currentStatus);
+
+                            return (
+                              <select
+                                key={idx}
+                                className={`status-select status-select-${slug}`}
+                                value={currentStatus}
+                                onChange={(e) => {
+                                  setDoctorScheduleStatus(d.id, s, idx, e.target.value);
+                                  setStatusVersion((v) => v + 1);
+                                }}
+                              >
+                                <option value="">Select Status</option>
+                                {STATUS_OPTIONS.map((opt) => (
+                                  <option key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                  </option>
+                                ))}
+                              </select>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <span className="text-muted">—</span>
                       )}
                     </td>
                     <td className="cell-actions">
@@ -210,15 +324,27 @@ export default function DoctorDirectory() {
             {modalError && <ErrorBanner message={modalError} />}
 
             <form onSubmit={handleRegister} className="form-layout">
-              <div className="form-group">
-                <label>Doctor Full Name *</label>
-                <input
-                  required
-                  type="text"
-                  placeholder="e.g. Dr. Jane Smith"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                />
+              <div className="form-row">
+                <div className="form-group">
+                  <label>First Name *</label>
+                  <input
+                    required
+                    type="text"
+                    placeholder="e.g. Jane"
+                    value={formData.firstName}
+                    onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Last Name *</label>
+                  <input
+                    required
+                    type="text"
+                    placeholder="e.g. Smith"
+                    value={formData.lastName}
+                    onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                  />
+                </div>
               </div>
               <div className="form-row">
                 <div className="form-group">
@@ -258,33 +384,6 @@ export default function DoctorDirectory() {
                   />
                 </div>
               </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Specialization *</label>
-                  <select
-                    value={formData.specializationId}
-                    onChange={(e) => setFormData({ ...formData, specializationId: e.target.value })}
-                  >
-                    {specializations.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Monthly Salary (₱) *</label>
-                  <input
-                    required
-                    type="number"
-                    min="0"
-                    step="100"
-                    placeholder="e.g. 65000"
-                    value={formData.salary}
-                    onChange={(e) => setFormData({ ...formData, salary: e.target.value })}
-                  />
-                </div>
-              </div>
 
               {/* Multiple Weekly Schedules Section */}
               <div className="form-group">
@@ -300,43 +399,55 @@ export default function DoctorDirectory() {
                 </div>
 
                 <div className="schedules-builder-container">
-                  {formData.schedules.map((row, idx) => (
-                    <div key={idx} className="schedule-builder-row">
-                      <select
-                        value={row.dayOfWeek}
-                        onChange={(e) => handleScheduleChange(idx, "dayOfWeek", e.target.value)}
+                  {formData.schedules.map((row, idx) => {
+                    const isConflict = scheduleConflicts.has(idx);
+                    return (
+                      <div
+                        key={idx}
+                        className={`schedule-builder-row ${isConflict ? "schedule-builder-row-conflict" : ""}`}
                       >
-                        {DAYS_OF_WEEK.map((day) => (
-                          <option key={day} value={day}>
-                            {day}
-                          </option>
-                        ))}
-                      </select>
-                      <input
-                        type="time"
-                        required
-                        value={row.startTime}
-                        onChange={(e) => handleScheduleChange(idx, "startTime", e.target.value)}
-                      />
-                      <span className="schedule-to-label">to</span>
-                      <input
-                        type="time"
-                        required
-                        value={row.endTime}
-                        onChange={(e) => handleScheduleChange(idx, "endTime", e.target.value)}
-                      />
-                      {formData.schedules.length > 1 && (
-                        <button
-                          type="button"
-                          className="remove-row-btn"
-                          title="Remove this schedule block"
-                          onClick={() => handleRemoveScheduleRow(idx)}
+                        <select
+                          value={row.dayOfWeek}
+                          onChange={(e) => handleScheduleChange(idx, "dayOfWeek", e.target.value)}
                         >
-                          ✕
-                        </button>
-                      )}
+                          {DAYS_OF_WEEK.map((day) => (
+                            <option key={day} value={day}>
+                              {day}
+                            </option>
+                          ))}
+                        </select>
+                        <input
+                          type="time"
+                          required
+                          value={row.startTime}
+                          onChange={(e) => handleScheduleChange(idx, "startTime", e.target.value)}
+                        />
+                        <span className="schedule-to-label">to</span>
+                        <input
+                          type="time"
+                          required
+                          value={row.endTime}
+                          onChange={(e) => handleScheduleChange(idx, "endTime", e.target.value)}
+                        />
+                        {formData.schedules.length > 1 && (
+                          <button
+                            type="button"
+                            className="remove-row-btn"
+                            title="Remove this schedule block"
+                            onClick={() => handleRemoveScheduleRow(idx)}
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {scheduleConflictMessages.length > 0 && (
+                    <div className="schedule-conflict-warning">
+                      <span>⚠️</span>
+                      <span>{scheduleConflictMessages[0]}</span>
                     </div>
-                  ))}
+                  )}
                 </div>
               </div>
 
@@ -344,7 +455,11 @@ export default function DoctorDirectory() {
                 <button type="button" className="secondary-btn" onClick={() => setShowModal(false)}>
                   Cancel
                 </button>
-                <button type="submit" className="primary-btn" disabled={submitting}>
+                <button
+                  type="submit"
+                  className="primary-btn"
+                  disabled={submitting || scheduleConflictMessages.length > 0}
+                >
                   {submitting ? "Saving..." : "Save Doctor"}
                 </button>
               </div>

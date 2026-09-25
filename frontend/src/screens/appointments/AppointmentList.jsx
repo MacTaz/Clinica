@@ -24,7 +24,6 @@ export default function AppointmentList() {
   const [patientSearch, setPatientSearch] = useState("");
   const [selectedPatientId, setSelectedPatientId] = useState("");
   const [bookingAilment, setBookingAilment] = useState("");
-  const [selectedSpecId, setSelectedSpecId] = useState("");
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0]);
   const [availableDoctors, setAvailableDoctors] = useState([]);
   const [selectedDoctorId, setSelectedDoctorId] = useState("");
@@ -35,7 +34,7 @@ export default function AppointmentList() {
     Promise.all([
       getAppointments(),
       getPatients(),
-      getSpecializations(),
+      getSpecializations().catch(() => []),
       getDoctors(),
     ])
       .then(([appts, pats, specs, docs]) => {
@@ -43,7 +42,6 @@ export default function AppointmentList() {
         setPatients(pats);
         setSpecializations(specs);
         setDoctors(docs);
-        if (specs.length > 0 && !selectedSpecId) setSelectedSpecId(specs[0].id);
         if (pats.length > 0 && !selectedPatientId) setSelectedPatientId(String(pats[0].id));
       })
       .catch((err) => setError(err.message));
@@ -68,18 +66,22 @@ export default function AppointmentList() {
 
   const patientMap = new Map(patients.map((p) => [p.id, p]));
 
-  // Fetch slots whenever specialization or date changes in booking modal
+  // Fetch slots whenever date changes in booking modal
   useEffect(() => {
-    if (showModal && selectedSpecId && selectedDate) {
+    if (showModal && selectedDate) {
       setLoadingSlots(true);
       setBookingError(null);
-      getAvailability(selectedSpecId, selectedDate)
-        .then((data) => {
-          setAvailableDoctors(data);
-          if (data.length > 0) {
-            setSelectedDoctorId(String(data[0].doctorId));
-            if (data[0].freeSlots && data[0].freeSlots.length > 0) {
-              const firstSlot = data[0].freeSlots[0];
+      const specsToQuery = specializations.length > 0 ? specializations : [{ id: 1 }];
+      Promise.all(specsToQuery.map((s) => getAvailability(s.id, selectedDate).catch(() => [])))
+        .then((results) => {
+          const merged = results.flat();
+          // Deduplicate doctors
+          const uniqueDocs = Array.from(new Map(merged.map((d) => [d.doctorId, d])).values());
+          setAvailableDoctors(uniqueDocs);
+          if (uniqueDocs.length > 0) {
+            setSelectedDoctorId(String(uniqueDocs[0].doctorId));
+            if (uniqueDocs[0].freeSlots && uniqueDocs[0].freeSlots.length > 0) {
+              const firstSlot = uniqueDocs[0].freeSlots[0];
               setSelectedSlot(typeof firstSlot === "string" ? firstSlot.substring(0, 5) : firstSlot);
             } else {
               setSelectedSlot("");
@@ -96,15 +98,12 @@ export default function AppointmentList() {
         })
         .finally(() => setLoadingSlots(false));
     }
-  }, [showModal, selectedSpecId, selectedDate]);
+  }, [showModal, specializations, selectedDate]);
 
   const handleOpenModal = () => {
     setBookingError(null);
     setPatientSearch("");
     setBookingAilment("");
-    if (specializations.length > 0 && !selectedSpecId) {
-      setSelectedSpecId(specializations[0].id);
-    }
     if (patients.length > 0 && !selectedPatientId) {
       setSelectedPatientId(String(patients[0].id));
     }
@@ -167,10 +166,8 @@ export default function AppointmentList() {
 
   const activeDoctorObj = availableDoctors.find((d) => String(d.doctorId) === String(selectedDoctorId));
 
-  // Registered doctors for the currently selected specialization
-  const matchingDoctors = doctors.filter(
-    (d) => String(d.specialization?.id) === String(selectedSpecId)
-  );
+  // Registered doctors with active schedules
+  const scheduledDoctors = doctors.filter((d) => d.schedules && d.schedules.length > 0);
 
   // Filtered patients in modal search
   const filteredModalPatients = patients.filter((p) => {
@@ -234,6 +231,15 @@ export default function AppointmentList() {
         ) : (
           <div className="table-responsive">
             <table className="dash-table">
+              <colgroup>
+                <col style={{ width: "7%" }} />
+                <col style={{ width: "18%" }} />
+                <col style={{ width: "22%" }} />
+                <col style={{ width: "18%" }} />
+                <col style={{ width: "17%" }} />
+                <col style={{ width: "10%" }} />
+                <col style={{ width: "8%" }} />
+              </colgroup>
               <thead>
                 <tr>
                   <th>ID</th>
@@ -242,7 +248,7 @@ export default function AppointmentList() {
                   <th>Doctor</th>
                   <th>Date & Time</th>
                   <th>Status</th>
-                  <th className="th-status">Actions</th>
+                  <th className="th-actions">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -346,37 +352,21 @@ export default function AppointmentList() {
                 />
               </div>
 
-              <div className="form-row">
-                <div className="form-group">
-                  <label>3. Specialization *</label>
-                  <select
-                    value={selectedSpecId}
-                    onChange={(e) => setSelectedSpecId(e.target.value)}
-                  >
-                    {specializations.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="form-group">
-                  <label>4. Date ({selectedDayOfWeekName}) *</label>
-                  <input
-                    type="date"
-                    min={new Date().toISOString().split("T")[0]}
-                    value={selectedDate}
-                    onChange={(e) => setSelectedDate(e.target.value)}
-                  />
-                </div>
+              <div className="form-group">
+                <label>3. Date ({selectedDayOfWeekName}) *</label>
+                <input
+                  type="date"
+                  min={new Date().toISOString().split("T")[0]}
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                />
               </div>
 
               {/* Doctor Duty Information Banner */}
-              {matchingDoctors.length > 0 && (
+              {scheduledDoctors.length > 0 && (
                 <div className="schedule-info-box">
                   <span className="schedule-info-title">Registered Doctor Duty Days:</span>
-                  {matchingDoctors.map((doc) => (
+                  {scheduledDoctors.map((doc) => (
                     <div key={doc.id} className="schedule-info-item">
                       <strong>{doc.name}:</strong>{" "}
                       {doc.schedules?.length > 0
@@ -388,7 +378,7 @@ export default function AppointmentList() {
               )}
 
               <div className="form-group">
-                <label>5. Available Doctors & 30-Min Slots</label>
+                <label>4. Available Doctors & 30-Min Slots</label>
                 {loadingSlots ? (
                   <p className="loading-text">Checking available doctor schedules for {selectedDayOfWeekName}...</p>
                 ) : availableDoctors.length === 0 ? (

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { getAppointments } from "../../api/appointments.js";
 import { getPatients } from "../../api/patients.js";
 import { getDoctors } from "../../api/doctors.js";
+import { getDoctorScheduleStatus, statusToSlug } from "../../utils/doctorStatus.js";
 import LoadingSpinner from "../../components/LoadingSpinner.jsx";
 import ErrorBanner from "../../components/ErrorBanner.jsx";
 
@@ -48,6 +49,15 @@ export default function DashboardScreen() {
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [, setStatusTick] = useState(0);
+
+  useEffect(() => {
+    function onStatusChange() {
+      setStatusTick((t) => t + 1);
+    }
+    window.addEventListener("clinica-doctor-status-change", onStatusChange);
+    return () => window.removeEventListener("clinica-doctor-status-change", onStatusChange);
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -110,6 +120,14 @@ export default function DashboardScreen() {
         ) : (
           <div className="table-responsive">
             <table className="dash-table">
+              <colgroup>
+                <col style={{ width: "20%" }} />
+                <col style={{ width: "10%" }} />
+                <col style={{ width: "25%" }} />
+                <col style={{ width: "20%" }} />
+                <col style={{ width: "15%" }} />
+                <col style={{ width: "10%" }} />
+              </colgroup>
               <thead>
                 <tr>
                   <th>Patient Name</th>
@@ -172,29 +190,65 @@ export default function DashboardScreen() {
         ) : (
           <div className="table-responsive">
             <table className="dash-table">
+              <colgroup>
+                <col style={{ width: "24%" }} />
+                <col style={{ width: "18%" }} />
+                <col style={{ width: "38%" }} />
+                <col style={{ width: "20%" }} />
+              </colgroup>
               <thead>
                 <tr>
                   <th>Name</th>
                   <th>Phone Number</th>
-                  <th>Scheduled Appointments</th>
+                  <th>Weekly Schedules</th>
                   <th className="th-status">Current Status</th>
                 </tr>
               </thead>
               <tbody>
-                {doctors.map((doc) => {
-                  const dutyStatus = getDoctorDutyStatus(doc.schedules);
-                  const isOnDuty = dutyStatus === "On Duty";
-                  return (
-                    <tr key={doc.id}>
-                      <td className="cell-doctor-name">{doc.name}</td>
-                      <td>{doc.contact || "—"}</td>
-                      <td>{getDoctorScheduleSummary(doc.schedules)}</td>
-                      <td className={`cell-status ${isOnDuty ? "status-confirmed" : "status-neutral"}`}>
-                        {dutyStatus}
-                      </td>
-                    </tr>
-                  );
-                })}
+                {doctors.map((doc) => (
+                  <tr key={doc.id}>
+                    <td className="cell-doctor-name">{doc.name}</td>
+                    <td>{doc.contact || "—"}</td>
+                    <td>
+                      {doc.schedules && doc.schedules.length > 0 ? (
+                        <div className="schedules-vertical-list">
+                          {doc.schedules.map((s, idx) => (
+                            <div key={idx} className="schedule-pill">
+                              <strong>{s.dayOfWeek?.substring(0, 3)}:</strong> {s.startTime?.substring(0, 5)}–{s.endTime?.substring(0, 5)}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-muted">No schedule set</span>
+                      )}
+                    </td>
+                    <td className="cell-status">
+                      {doc.schedules && doc.schedules.length > 0 ? (
+                        <div className="status-vertical-list" style={{ alignItems: "flex-end" }}>
+                          {doc.schedules.map((s, idx) => {
+                            const status = getDoctorScheduleStatus(doc, s, idx);
+                            const slug = statusToSlug(status);
+                            return (
+                              <div key={idx} className="status-badge-container">
+                                {status ? (
+                                  <span className={`status-badge status-badge-${slug}`}>
+                                    {status}
+                                  </span>
+                                ) : (
+                                  <span className="status-badge status-badge-unselected">
+                                    Not Set
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <span className="text-muted">—</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>

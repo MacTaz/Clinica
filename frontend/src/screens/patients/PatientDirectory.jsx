@@ -108,13 +108,20 @@ export default function PatientDirectory() {
         ) : (
           <div className="table-responsive">
             <table className="dash-table">
+              <colgroup>
+                <col style={{ width: "22%" }} />
+                <col style={{ width: "10%" }} />
+                <col style={{ width: "18%" }} />
+                <col style={{ width: "40%" }} />
+                <col style={{ width: "10%" }} />
+              </colgroup>
               <thead>
                 <tr>
                   <th>Name</th>
                   <th>Age</th>
                   <th>Contact</th>
                   <th>Current / Last Ailment</th>
-                  <th className="th-status">Actions</th>
+                  <th className="th-actions">Actions</th>
                 </tr>
               </thead>
               <tbody>
