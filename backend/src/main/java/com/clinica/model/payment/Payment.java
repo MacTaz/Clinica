@@ -52,6 +52,9 @@ public class Payment {
     @Column(name = "gcash_reference", length = 13)
     private String gcashReference; // GCASH
 
+    @Column(name = "installment_months")
+    private Integer installmentMonths; // CARD >= 10,000.00 only: 3, 6 or 12; null = straight payment
+
     public void markPaid(PaymentMethod method) {
         this.method = method;
         this.status = PaymentStatus.PAID;
@@ -74,4 +77,6 @@ public class Payment {
     public void setApprovalCode(String approvalCode) { this.approvalCode = approvalCode; }
     public String getGcashReference() { return gcashReference; }
     public void setGcashReference(String gcashReference) { this.gcashReference = gcashReference; }
+    public Integer getInstallmentMonths() { return installmentMonths; }
+    public void setInstallmentMonths(Integer installmentMonths) { this.installmentMonths = installmentMonths; }
 }

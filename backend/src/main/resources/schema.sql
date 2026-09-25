@@ -53,16 +53,17 @@ CREATE TABLE IF NOT EXISTS appointments (
 );
 
 CREATE TABLE IF NOT EXISTS payments (
-    id               BIGINT AUTO_INCREMENT PRIMARY KEY,
-    appointment_id   BIGINT NOT NULL UNIQUE,
-    amount           DECIMAL(10,2) NOT NULL CHECK (amount >= 0),
-    method           VARCHAR(20) NOT NULL,
-    status           VARCHAR(10) NOT NULL DEFAULT 'UNPAID',
-    paid_at          DATETIME NULL,
-    received_by      VARCHAR(100) NULL,  -- CASH: staff who received the cash
-    card_last4       CHAR(4) NULL,       -- CARD: last 4 digits only, never the full card number
-    approval_code    VARCHAR(12) NULL,   -- CARD: approval code from the POS terminal receipt
-    gcash_reference  CHAR(13) NULL,      -- GCASH: 13-digit GCash reference number
+    id                 BIGINT AUTO_INCREMENT PRIMARY KEY,
+    appointment_id     BIGINT NOT NULL UNIQUE,
+    amount             DECIMAL(10,2) NOT NULL CHECK (amount >= 0),
+    method             VARCHAR(20) NOT NULL,
+    status             VARCHAR(10) NOT NULL DEFAULT 'UNPAID',
+    paid_at            DATETIME NULL,
+    received_by        VARCHAR(100) NULL,     -- CASH: staff who received the cash
+    card_last4         CHAR(4) NULL,          -- CARD: last 4 digits only, never the full card number
+    approval_code      VARCHAR(12) NULL,      -- CARD: approval code from the POS terminal receipt
+    gcash_reference    CHAR(13) NULL,         -- GCASH: 13-digit GCash reference number
+    installment_months TINYINT NULL,          -- CARD >= 10,000.00 only: 3, 6 or 12; NULL = straight payment
     FOREIGN KEY (appointment_id) REFERENCES appointments(id) ON DELETE CASCADE,
     CONSTRAINT chk_payments_method CHECK (method IN ('CASH', 'CARD', 'GCASH')),
     CONSTRAINT chk_payments_status CHECK (status IN ('UNPAID', 'PAID')),
@@ -78,6 +79,10 @@ CREATE TABLE IF NOT EXISTS payments (
      OR (method = 'GCASH'
             AND gcash_reference IS NOT NULL AND gcash_reference REGEXP '^[0-9]{13}$'
             AND received_by IS NULL AND card_last4 IS NULL AND approval_code IS NULL)
+    ),
+    CONSTRAINT chk_payments_installment CHECK (
+        installment_months IS NULL
+        OR (installment_months IN (3, 6, 12) AND method = 'CARD' AND amount >= 10000.00)
     )
 );
 
@@ -119,6 +124,14 @@ PREPARE stmt FROM @ddl;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
+SET @ddl = IF((SELECT COUNT(*) FROM information_schema.COLUMNS
+               WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'payments' AND COLUMN_NAME = 'installment_months') = 0,
+              'ALTER TABLE payments ADD COLUMN installment_months TINYINT NULL AFTER gcash_reference',
+              'SELECT 1');
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
 SET @ddl = IF((SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS
                WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'payments' AND CONSTRAINT_NAME = 'chk_payments_method') = 0,
               'ALTER TABLE payments ADD CONSTRAINT chk_payments_method CHECK (method IN (''CASH'', ''CARD'', ''GCASH''))',
@@ -146,6 +159,14 @@ DEALLOCATE PREPARE stmt;
 SET @ddl = IF((SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS
                WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'payments' AND CONSTRAINT_NAME = 'chk_payments_method_details') = 0,
               'ALTER TABLE payments ADD CONSTRAINT chk_payments_method_details CHECK ((method = ''CASH'' AND received_by IS NOT NULL AND TRIM(received_by) <> '''' AND card_last4 IS NULL AND approval_code IS NULL AND gcash_reference IS NULL) OR (method = ''CARD'' AND card_last4 IS NOT NULL AND card_last4 REGEXP ''^[0-9]{4}$'' AND approval_code IS NOT NULL AND approval_code REGEXP ''^[A-Za-z0-9]{1,12}$'' AND received_by IS NULL AND gcash_reference IS NULL) OR (method = ''GCASH'' AND gcash_reference IS NOT NULL AND gcash_reference REGEXP ''^[0-9]{13}$'' AND received_by IS NULL AND card_last4 IS NULL AND approval_code IS NULL))',
+              'SELECT 1');
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @ddl = IF((SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS
+               WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'payments' AND CONSTRAINT_NAME = 'chk_payments_installment') = 0,
+              'ALTER TABLE payments ADD CONSTRAINT chk_payments_installment CHECK (installment_months IS NULL OR (installment_months IN (3, 6, 12) AND method = ''CARD'' AND amount >= 10000.00))',
               'SELECT 1');
 PREPARE stmt FROM @ddl;
 EXECUTE stmt;

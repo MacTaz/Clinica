@@ -10,13 +10,19 @@ import com.clinica.model.payment.Payment;
 import com.clinica.model.payment.PaymentMethod;
 import com.clinica.repository.appointment.AppointmentRepository;
 import com.clinica.repository.payment.PaymentRepository;
+import java.math.BigDecimal;
 import java.util.List;
+import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @Transactional
 public class PaymentService {
+
+    // Card installments: the bank pays the clinic in full, so this is still one PAID payment
+    private static final Set<Integer> INSTALLMENT_TERMS = Set.of(3, 6, 12);
+    private static final BigDecimal INSTALLMENT_MIN_AMOUNT = new BigDecimal("10000.00");
 
     private final PaymentRepository paymentRepository;
     private final AppointmentRepository appointmentRepository;
@@ -41,6 +47,7 @@ public class PaymentService {
         payment.setAppointment(appointment);
         payment.setAmount(request.amount());
         applyMethodDetails(payment, request);
+        applyInstallment(payment, request);
         payment.markPaid(request.method()); // Sets status PAID and paidAt = now
 
         return toResponse(paymentRepository.save(payment));
@@ -100,6 +107,31 @@ public class PaymentService {
         payment.setGcashReference(gcashReference);
     }
 
+    // installmentMonths: 3, 6 or 12, only for CARD with amount >= 10,000.00 (mirrored by chk_payments_installment)
+    private void applyInstallment(Payment payment, PaymentRequest request) {
+        Integer months = toInstallmentTerm(request.installmentMonths());
+        if (months != null) {
+            if (request.method() != PaymentMethod.CARD) {
+                throw new InvalidRecordDataException("installmentMonths is only allowed for CARD payments.");
+            }
+            if (request.amount().compareTo(INSTALLMENT_MIN_AMOUNT) < 0) {
+                throw new InvalidRecordDataException("installmentMonths requires an amount of at least 10,000.00.");
+            }
+        }
+        payment.setInstallmentMonths(months);
+    }
+
+    // Accepts only whole numbers 3, 6 or 12 (so 6.5 is rejected instead of truncated)
+    private static Integer toInstallmentTerm(BigDecimal value) {
+        if (value == null) return null;
+        BigDecimal normalized = value.stripTrailingZeros();
+        if (normalized.scale() > 0 || !INSTALLMENT_TERMS.contains(normalized.intValue())
+                || normalized.compareTo(BigDecimal.valueOf(normalized.intValue())) != 0) {
+            throw new InvalidRecordDataException("installmentMonths must be 3, 6 or 12.");
+        }
+        return normalized.intValue();
+    }
+
     private static void rejectIfPresent(PaymentMethod method, String field, String value) {
         if (value != null) {
             throw new InvalidRecordDataException(field + " is not allowed for " + method + " payments.");
@@ -124,7 +156,8 @@ public class PaymentService {
                 payment.getReceivedBy(),
                 payment.getCardLast4(),
                 payment.getApprovalCode(),
-                payment.getGcashReference()
+                payment.getGcashReference(),
+                payment.getInstallmentMonths()
         );
     }
 }
