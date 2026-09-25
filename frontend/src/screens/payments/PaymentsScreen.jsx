@@ -117,6 +117,14 @@ export default function PaymentsScreen() {
   const unpaidAppointments = appointments.filter((a) => !paidAppointmentIds.has(a.id));
   const hasUnpaidAppointment = unpaidAppointments.length > 0;
 
+  // Submit is enabled once required fields are filled; formats are checked on submit so errors are shown
+  const methodFieldsFilled = {
+    CASH: details.receivedBy.trim() !== "",
+    CARD: details.cardLast4.trim() !== "" && details.approvalCode.trim() !== "",
+    GCASH: details.gcashReference.trim() !== "",
+  }[method];
+  const canSubmit = selectedAppointmentId !== "" && Number(amount) > 0 && methodFieldsFilled;
+
   // Demo-only GCash QR: encodes a fake string, not a real payment request
   const qrReady = selectedAppointmentId && Number(amount) > 0;
   const qrValue = `CLINICA|appt=${selectedAppointmentId}|amount=${Number(amount).toFixed(2)}`;
@@ -139,21 +147,15 @@ export default function PaymentsScreen() {
         {formError && <ErrorBanner message={formError} />}
 
         <form onSubmit={handleRecordPayment} className="form-layout">
-          {!hasUnpaidAppointment ? (
-            <p className="empty-notice">
-              {appointments.length === 0
-                ? "No appointments yet. Book one in the Appointments tab to record a payment."
-                : "All appointments are already paid. Book a new appointment to record a payment."}
-            </p>
-          ) : (
-            <>
-              {/* Placeholder appointment picker — to be replaced by Mico's appointment picker */}
-              <div className="form-group">
-                <label>Appointment *</label>
-                <select
-                  value={selectedAppointmentId}
-                  onChange={(e) => setSelectedAppointmentId(e.target.value)}
-                >
+          {/* Placeholder appointment picker — to be replaced by Mico's appointment picker */}
+          <div className="form-group">
+            <label>Appointment *</label>
+            <select
+              value={selectedAppointmentId}
+              onChange={(e) => setSelectedAppointmentId(e.target.value)}
+            >
+              {hasUnpaidAppointment ? (
+                <>
                   <option value="">Select an appointment...</option>
                   {unpaidAppointments.map((a) => (
                     <option key={a.id} value={a.id}>
@@ -161,113 +163,120 @@ export default function PaymentsScreen() {
                       {a.startTime?.substring(0, 5)}
                     </option>
                   ))}
-                </select>
-              </div>
+                </>
+              ) : (
+                <option value="" disabled>
+                  No unpaid appointments
+                </option>
+              )}
+            </select>
+            {!hasUnpaidAppointment && (
+              <small className="section-subtext">Book a new appointment to record a payment.</small>
+            )}
+          </div>
 
+          <div className="form-row">
+            <div className="form-group">
+              <label>Amount (₱) *</label>
+              <input
+                required
+                type="number"
+                min="0.01"
+                step="0.01"
+                placeholder="e.g. 800.00"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Payment Method *</label>
+              <select value={method} onChange={handleMethodChange}>
+                {PAYMENT_METHODS.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {method === "CASH" && (
+            <div className="form-group">
+              <label>Received by *</label>
+              <input
+                required
+                type="text"
+                maxLength={100}
+                placeholder="Staff name, e.g. Ana"
+                value={details.receivedBy}
+                onChange={setDetail("receivedBy")}
+              />
+            </div>
+          )}
+
+          {method === "CARD" && (
+            <>
               <div className="form-row">
                 <div className="form-group">
-                  <label>Amount (₱) *</label>
-                  <input
-                    required
-                    type="number"
-                    min="0.01"
-                    step="0.01"
-                    placeholder="e.g. 800.00"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>Payment Method *</label>
-                  <select value={method} onChange={handleMethodChange}>
-                    {PAYMENT_METHODS.map((m) => (
-                      <option key={m} value={m}>
-                        {m}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {method === "CASH" && (
-                <div className="form-group">
-                  <label>Received by *</label>
+                  <label>Card last 4 digits *</label>
+                  {/* No maxLength: truncating a pasted card number would keep its FIRST 4 digits */}
                   <input
                     required
                     type="text"
-                    maxLength={100}
-                    placeholder="Staff name, e.g. Ana"
-                    value={details.receivedBy}
-                    onChange={setDetail("receivedBy")}
+                    inputMode="numeric"
+                    autoComplete="off"
+                    pattern="\d{4}"
+                    title="Exactly 4 digits: the last 4 of the card only"
+                    placeholder="e.g. 1234"
+                    value={details.cardLast4}
+                    onChange={setDetail("cardLast4")}
                   />
                 </div>
-              )}
 
-              {method === "CARD" && (
-                <>
-                  <div className="form-row">
-                    <div className="form-group">
-                      <label>Card last 4 digits *</label>
-                      {/* No maxLength: truncating a pasted card number would keep its FIRST 4 digits */}
-                      <input
-                        required
-                        type="text"
-                        inputMode="numeric"
-                        autoComplete="off"
-                        pattern="\d{4}"
-                        title="Exactly 4 digits: the last 4 of the card only"
-                        placeholder="e.g. 1234"
-                        value={details.cardLast4}
-                        onChange={setDetail("cardLast4")}
-                      />
-                    </div>
+                <div className="form-group">
+                  <label>Approval code *</label>
+                  <input
+                    required
+                    type="text"
+                    autoComplete="off"
+                    pattern="[A-Za-z0-9]{1,12}"
+                    title="1 to 12 letters or digits"
+                    placeholder="From the POS terminal receipt"
+                    value={details.approvalCode}
+                    onChange={setDetail("approvalCode")}
+                  />
+                </div>
+              </div>
+              <small className="section-subtext">Never enter the full card number — only the last 4 digits are recorded.</small>
+            </>
+          )}
 
-                    <div className="form-group">
-                      <label>Approval code *</label>
-                      <input
-                        required
-                        type="text"
-                        autoComplete="off"
-                        pattern="[A-Za-z0-9]{1,12}"
-                        title="1 to 12 letters or digits"
-                        placeholder="From the POS terminal receipt"
-                        value={details.approvalCode}
-                        onChange={setDetail("approvalCode")}
-                      />
-                    </div>
-                  </div>
-                  <small className="section-subtext">Never enter the full card number — only the last 4 digits are recorded.</small>
-                </>
-              )}
+          {method === "GCASH" && (
+            <>
+              <div className="form-group">
+                <label>Sample QR - demo only, not a real payment</label>
+                {qrReady ? (
+                  <QRCodeSVG value={qrValue} size={160} />
+                ) : (
+                  <p className="empty-notice">Select an appointment and enter an amount to show the sample QR.</p>
+                )}
+              </div>
 
-              {method === "GCASH" && (
-                <>
-                  <div className="form-group">
-                    <label>Sample QR - demo only, not a real payment</label>
-                    {qrReady ? (
-                      <QRCodeSVG value={qrValue} size={160} />
-                    ) : (
-                      <p className="empty-notice">Select an appointment and enter an amount to show the sample QR.</p>
-                    )}
-                  </div>
-
-                  <div className="form-group">
-                    <label>GCash reference number *</label>
-                    <input
-                      required
-                      type="text"
-                      inputMode="numeric"
-                      autoComplete="off"
-                      pattern="\d{13}"
-                      title="Exactly 13 digits"
-                      placeholder="13-digit reference from the GCash receipt"
-                      value={details.gcashReference}
-                      onChange={setDetail("gcashReference")}
-                    />
-                  </div>
-                </>
-              )}
+              <div className="form-group">
+                <label>GCash reference number *</label>
+                <input
+                  required
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  pattern="\d{13}"
+                  title="Exactly 13 digits"
+                  placeholder="13-digit reference from the GCash receipt"
+                  value={details.gcashReference}
+                  onChange={setDetail("gcashReference")}
+                />
+              </div>
             </>
           )}
 
@@ -275,7 +284,7 @@ export default function PaymentsScreen() {
             <button
               type="submit"
               className="primary-btn"
-              disabled={submitting || !hasUnpaidAppointment || !selectedAppointmentId || !amount}
+              disabled={submitting || !canSubmit}
             >
               {submitting ? "Recording..." : "Record Payment"}
             </button>
