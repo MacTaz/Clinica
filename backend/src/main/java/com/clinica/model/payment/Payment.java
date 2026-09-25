@@ -1,6 +1,7 @@
 package com.clinica.model.payment;
 
 import com.clinica.model.appointment.Appointment;
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -25,12 +26,15 @@ public class Payment {
     @JoinColumn(name = "appointment_id", nullable = false, unique = true)
     private Appointment appointment;
 
+    @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal amount;
 
     @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
     private PaymentMethod method;
 
     @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 10)
     private PaymentStatus status = PaymentStatus.UNPAID;
 
     private LocalDateTime paidAt;
