@@ -7,6 +7,7 @@ import LoadingSpinner from "../../components/LoadingSpinner.jsx";
 import ErrorBanner from "../../components/ErrorBanner.jsx";
 
 const DAYS_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const PAYMENT_METHODS = ["CASH", "CARD", "GCASH", "INSURANCE"];
 
 const STATUS_LABELS = {
@@ -14,6 +15,29 @@ const STATUS_LABELS = {
   COMPLETED: { label: "Completed", className: "status-completed" },
   PAID: { label: "Paid", className: "status-paid" },
 };
+
+/** Convert "HH:MM" or "HH:MM:SS" to "h:MM AM/PM" */
+function formatTimeTo12h(timeStr) {
+  if (!timeStr) return "--";
+  const parts = timeStr.split(":");
+  let hours = parseInt(parts[0], 10);
+  const minutes = parts[1] || "00";
+  const ampm = hours >= 12 ? "PM" : "AM";
+  hours = hours % 12 || 12;
+  return `${hours}:${minutes} ${ampm}`;
+}
+
+/** Format a date string "YYYY-MM-DD" to "MMM D, YYYY" */
+function formatDate(dateStr) {
+  if (!dateStr) return "--";
+  const [year, month, day] = dateStr.split("-");
+  return `${MONTH_NAMES[parseInt(month, 10) - 1].slice(0, 3)} ${parseInt(day, 10)}, ${year}`;
+}
+
+/** Build a YYYY-MM-DD string from year/month/day (all numbers) */
+function toDateStr(year, month, day) {
+  return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
 
 export default function AppointmentList() {
   const [appointments, setAppointments] = useState(null);
@@ -268,13 +292,13 @@ export default function AppointmentList() {
             <table className="dash-table">
               <colgroup>
                 <col style={{ width: "5%" }} />
-                <col style={{ width: "15%" }} />
-                <col style={{ width: "18%" }} />
-                <col style={{ width: "15%" }} />
-                <col style={{ width: "15%" }} />
-                <col style={{ width: "11%" }} />
-                <col style={{ width: "9%" }} />
-                <col style={{ width: "12%" }} />
+                <col style={{ width: "16%" }} />
+                <col style={{ width: "20%" }} />
+                <col style={{ width: "16%" }} />
+                <col style={{ width: "13%" }} />
+                <col style={{ width: "10%" }} />
+                <col style={{ width: "10%" }} />
+                <col style={{ width: "10%" }} />
               </colgroup>
               <thead>
                 <tr>
@@ -282,16 +306,14 @@ export default function AppointmentList() {
                   <th>Patient</th>
                   <th>Ailment / Reason</th>
                   <th>Doctor</th>
-                  <th>Date &amp; Time</th>
-                  <th>Payment Method</th>
+                  <th>Date</th>
+                  <th>Time</th>
+                  <th>Payment</th>
                   <th>Status</th>
-                  <th className="th-actions">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredAppointments.map((a) => {
-                  const patient = patientMap.get(a.patient?.id);
-                  const startTime = a.startTime?.substring(0, 5) || "--:--";
                   const statusInfo = STATUS_LABELS[a.status] || { label: a.status, className: "status-confirmed" };
                   const isScheduled = a.status === "SCHEDULED" || !a.status;
                   const isCompleted = a.status === "COMPLETED";
@@ -303,7 +325,8 @@ export default function AppointmentList() {
                       <td className="cell-patient-name">{a.patient?.name}</td>
                       <td>{a.ailment || "General Consultation"}</td>
                       <td className="cell-doctor-name">{a.doctor?.name}</td>
-                      <td>{a.appointmentDate} @ {startTime}</td>
+                      <td>{formatDate(a.appointmentDate)}</td>
+                      <td>{formatTimeTo12h(a.startTime)}</td>
                       <td>
                         {a.paymentMethod ? (
                           <span className="payment-method-tag">{a.paymentMethod}</span>
@@ -325,7 +348,7 @@ export default function AppointmentList() {
                           >
                             <option value="SCHEDULED">Scheduled</option>
                             <option value="COMPLETED">Mark as Completed</option>
-                            <option value="CANCEL">✕ Cancel Appointment</option>
+                            <option value="CANCEL">✕ Cancel</option>
                           </select>
                         ) : isCompleted ? (
                           <select
@@ -338,26 +361,10 @@ export default function AppointmentList() {
                             title="Completed — ready for payment in Payments tab"
                           >
                             <option value="COMPLETED">Completed</option>
-                            <option value="CANCEL">✕ Cancel Appointment</option>
+                            <option value="CANCEL">✕ Cancel</option>
                           </select>
                         ) : (
-                          <span className="status-paid" title="Payment settled">
-                            Paid
-                          </span>
-                        )}
-                      </td>
-                      <td className="cell-actions">
-                        {!isPaid && (
-                          <button
-                            className="danger-btn-sm"
-                            disabled={cancelingId === a.id}
-                            onClick={() => handleCancel(a.id)}
-                          >
-                            {cancelingId === a.id ? "Canceling..." : "Cancel"}
-                          </button>
-                        )}
-                        {isPaid && (
-                          <span className="text-muted" style={{ fontSize: "0.78rem" }}>Settled</span>
+                          <span className="status-paid" title="Payment settled">Paid</span>
                         )}
                       </td>
                     </tr>
@@ -531,7 +538,7 @@ export default function AppointmentList() {
                                 className={`slot-chip ${isSelected ? "selected" : ""}`}
                                 onClick={() => setSelectedSlot(slotStr)}
                               >
-                                {slotStr}
+                                {formatTimeTo12h(slotStr)}
                               </button>
                             );
                           })}

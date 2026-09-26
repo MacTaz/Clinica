@@ -4,6 +4,26 @@ import { getAppointments } from "../../api/appointments.js";
 import LoadingSpinner from "../../components/LoadingSpinner.jsx";
 import ErrorBanner from "../../components/ErrorBanner.jsx";
 
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+/** Convert "HH:MM" or "HH:MM:SS" to "h:MM AM/PM" */
+function formatTimeTo12h(timeStr) {
+  if (!timeStr) return "--";
+  const parts = timeStr.split(":");
+  let hours = parseInt(parts[0], 10);
+  const minutes = parts[1] || "00";
+  const ampm = hours >= 12 ? "PM" : "AM";
+  hours = hours % 12 || 12;
+  return `${hours}:${minutes} ${ampm}`;
+}
+
+/** Format a date string "YYYY-MM-DD" to "MMM D, YYYY" */
+function formatDate(dateStr) {
+  if (!dateStr) return "--";
+  const [year, month, day] = dateStr.split("-");
+  return `${MONTH_NAMES[parseInt(month, 10) - 1].slice(0, 3)} ${parseInt(day, 10)}, ${year}`;
+}
+
 export default function PatientDirectory() {
   const [patients, setPatients] = useState(null);
   const [appointments, setAppointments] = useState([]);
@@ -529,6 +549,7 @@ export default function PatientDirectory() {
                             <th>Doctor Name</th>
                             <th>Ailment</th>
                             <th>Date</th>
+                            <th>Time</th>
                             <th>Status</th>
                           </tr>
                         </thead>
@@ -537,10 +558,8 @@ export default function PatientDirectory() {
                             <tr key={appt.id}>
                               <td className="cell-doctor-name">{appt.doctor?.name}</td>
                               <td>{appt.ailment || "General Consultation"}</td>
-                              <td>
-                                {appt.appointmentDate}
-                                {appt.startTime ? ` @ ${appt.startTime.substring(0, 5)}` : ""}
-                              </td>
+                              <td>{formatDate(appt.appointmentDate)}</td>
+                              <td>{formatTimeTo12h(appt.startTime)}</td>
                               <td>
                                 <span className={appt.status === "PAID" ? "status-paid" : appt.status === "COMPLETED" ? "status-completed" : "status-scheduled"}>
                                   {appt.status || "SCHEDULED"}
