@@ -6,6 +6,7 @@ import com.clinica.exception.InvalidRecordDataException;
 import com.clinica.exception.ResourceInUseException;
 import com.clinica.exception.ResourceNotFoundException;
 import com.clinica.model.appointment.Appointment;
+import com.clinica.model.appointment.AppointmentStatus;
 import com.clinica.model.payment.Payment;
 import com.clinica.model.payment.PaymentMethod;
 import com.clinica.repository.appointment.AppointmentRepository;
@@ -38,6 +39,11 @@ public class PaymentService {
         Appointment appointment = appointmentRepository.findById(appointmentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Appointment not found"));
 
+        // Appointment must be COMPLETED before a payment can be recorded
+        if (appointment.getStatus() != AppointmentStatus.COMPLETED) {
+            throw new InvalidRecordDataException("Payment can only be recorded for a completed appointment.");
+        }
+
         if (paymentRepository.findByAppointmentId(appointmentId).isPresent()) {
             throw new ResourceInUseException("Payment already recorded for this appointment.");
         }
@@ -49,6 +55,8 @@ public class PaymentService {
         applyMethodDetails(payment, request);
         applyInstallment(payment, request);
         payment.markPaid(request.method()); // Sets status PAID and paidAt = now
+        appointment.setStatus(AppointmentStatus.PAID);
+        appointmentRepository.save(appointment);
 
         return toResponse(paymentRepository.save(payment));
     }
@@ -98,6 +106,13 @@ public class PaymentService {
                 rejectIfPresent(method, "receivedBy", receivedBy);
                 rejectIfPresent(method, "cardLast4", cardLast4);
                 rejectIfPresent(method, "approvalCode", approvalCode);
+            }
+            case INSURANCE -> {
+                if (approvalCode == null || approvalCode.isEmpty()) {
+                    throw new InvalidRecordDataException("approvalCode (claim or approval reference) is required for INSURANCE.");
+                }
+                rejectIfPresent(method, "cardLast4", cardLast4);
+                rejectIfPresent(method, "gcashReference", gcashReference);
             }
         }
 

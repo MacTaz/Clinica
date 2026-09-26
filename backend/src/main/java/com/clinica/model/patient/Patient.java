@@ -12,6 +12,9 @@ public class Patient extends Person {
     @Column(nullable = false)
     private String ailment;
 
+    @Column(name = "insurance_provider", length = 100)
+    private String insuranceProvider; // Optional; null = none / uninsured
+
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(
             name = "patient_medical_history",
@@ -29,8 +32,18 @@ public class Patient extends Person {
     public String getAilment() { return ailment; }
     public void setAilment(String ailment) { this.ailment = ailment; }
 
+    public String getInsuranceProvider() { return insuranceProvider; }
+    public void setInsuranceProvider(String insuranceProvider) {
+        this.insuranceProvider = (insuranceProvider != null && !insuranceProvider.trim().isEmpty())
+                ? insuranceProvider.trim() : null;
+    }
+
     public List<String> getMedicalHistory() {
         return new ArrayList<>(medicalHistory);
+    }
+
+    public void setMedicalHistory(List<String> medicalHistory) {
+        this.medicalHistory = medicalHistory != null ? new ArrayList<>(medicalHistory) : new ArrayList<>();
     }
 
     public void addHistoryEntry(String entry) {

@@ -27,10 +27,12 @@ public class AvailabilityService {
         this.appointmentRepository = appointmentRepository;
     }
 
-    // Returns available doctors with free 30-min slots for the given specialization and date.
-    // Per API_CONTRACT.md: GET /appointments/availability?specializationId={id}&date={yyyy-mm-dd}
+    // Returns available doctors with free 30-min slots for the given specialization (or all doctors) and date.
+    // Per API_CONTRACT.md: GET /appointments/availability?date={yyyy-mm-dd}&specializationId={id}
     public List<DoctorAvailability> getAvailableDoctors(Long specializationId, LocalDate date) {
-        List<Doctor> doctors = doctorRepository.findBySpecializationId(specializationId);
+        List<Doctor> doctors = specializationId != null
+                ? doctorRepository.findBySpecializationId(specializationId)
+                : doctorRepository.findAll();
         LocalTime now = LocalTime.now();
         boolean isToday = date.equals(LocalDate.now());
 

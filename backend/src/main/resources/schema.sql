@@ -25,11 +25,12 @@ CREATE TABLE IF NOT EXISTS doctor_schedules (
 );
 
 CREATE TABLE IF NOT EXISTS patients (
-    id       BIGINT AUTO_INCREMENT PRIMARY KEY,
-    name     VARCHAR(100) NOT NULL,
-    age      INT NOT NULL CHECK (age BETWEEN 0 AND 150),
-    contact  VARCHAR(30) NOT NULL,
-    ailment  VARCHAR(255) NOT NULL
+    id                 BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name               VARCHAR(100) NOT NULL,
+    age                INT NOT NULL CHECK (age BETWEEN 0 AND 150),
+    contact            VARCHAR(30) NOT NULL,
+    ailment            VARCHAR(255) NOT NULL,
+    insurance_provider VARCHAR(100) NULL
 );
 
 CREATE TABLE IF NOT EXISTS patient_medical_history (
@@ -46,6 +47,8 @@ CREATE TABLE IF NOT EXISTS appointments (
     doctor_id         BIGINT NOT NULL,
     appointment_date  DATE NOT NULL,
     start_time        TIME NOT NULL,
+    status            VARCHAR(20) NOT NULL DEFAULT 'SCHEDULED',
+    payment_method    VARCHAR(20) NULL,
     FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE,
     FOREIGN KEY (doctor_id) REFERENCES doctors(id),
     UNIQUE (doctor_id, appointment_date, start_time),
@@ -61,11 +64,11 @@ CREATE TABLE IF NOT EXISTS payments (
     paid_at            DATETIME NULL,
     received_by        VARCHAR(100) NULL,     -- CASH: staff who received the cash
     card_last4         CHAR(4) NULL,          -- CARD: last 4 digits only, never the full card number
-    approval_code      VARCHAR(12) NULL,      -- CARD: approval code from the POS terminal receipt
+    approval_code      VARCHAR(100) NULL,     -- CARD: approval code from POS terminal; INSURANCE: claim/LOA reference
     gcash_reference    CHAR(13) NULL,         -- GCASH: 13-digit GCash reference number
     installment_months TINYINT NULL,          -- CARD >= 10,000.00 only: 3, 6 or 12; NULL = straight payment
     FOREIGN KEY (appointment_id) REFERENCES appointments(id) ON DELETE CASCADE,
-    CONSTRAINT chk_payments_method CHECK (method IN ('CASH', 'CARD', 'GCASH')),
+    CONSTRAINT chk_payments_method CHECK (method IN ('CASH', 'CARD', 'GCASH', 'INSURANCE')),
     CONSTRAINT chk_payments_status CHECK (status IN ('UNPAID', 'PAID')),
     CONSTRAINT chk_payments_paid_at CHECK ((status = 'PAID' AND paid_at IS NOT NULL) OR (status = 'UNPAID' AND paid_at IS NULL)),
     CONSTRAINT chk_payments_method_details CHECK (
@@ -79,6 +82,9 @@ CREATE TABLE IF NOT EXISTS payments (
      OR (method = 'GCASH'
             AND gcash_reference IS NOT NULL AND gcash_reference REGEXP '^[0-9]{13}$'
             AND received_by IS NULL AND card_last4 IS NULL AND approval_code IS NULL)
+     OR (method = 'INSURANCE'
+            AND approval_code IS NOT NULL AND TRIM(approval_code) <> ''
+            AND card_last4 IS NULL AND gcash_reference IS NULL)
     ),
     CONSTRAINT chk_payments_installment CHECK (
         installment_months IS NULL
@@ -134,7 +140,7 @@ DEALLOCATE PREPARE stmt;
 
 SET @ddl = IF((SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS
                WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'payments' AND CONSTRAINT_NAME = 'chk_payments_method') = 0,
-              'ALTER TABLE payments ADD CONSTRAINT chk_payments_method CHECK (method IN (''CASH'', ''CARD'', ''GCASH''))',
+              'ALTER TABLE payments ADD CONSTRAINT chk_payments_method CHECK (method IN (''CASH'', ''CARD'', ''GCASH'', ''INSURANCE''))',
               'SELECT 1');
 PREPARE stmt FROM @ddl;
 EXECUTE stmt;
@@ -158,7 +164,7 @@ DEALLOCATE PREPARE stmt;
 
 SET @ddl = IF((SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS
                WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'payments' AND CONSTRAINT_NAME = 'chk_payments_method_details') = 0,
-              'ALTER TABLE payments ADD CONSTRAINT chk_payments_method_details CHECK ((method = ''CASH'' AND received_by IS NOT NULL AND TRIM(received_by) <> '''' AND card_last4 IS NULL AND approval_code IS NULL AND gcash_reference IS NULL) OR (method = ''CARD'' AND card_last4 IS NOT NULL AND card_last4 REGEXP ''^[0-9]{4}$'' AND approval_code IS NOT NULL AND approval_code REGEXP ''^[A-Za-z0-9]{1,12}$'' AND received_by IS NULL AND gcash_reference IS NULL) OR (method = ''GCASH'' AND gcash_reference IS NOT NULL AND gcash_reference REGEXP ''^[0-9]{13}$'' AND received_by IS NULL AND card_last4 IS NULL AND approval_code IS NULL))',
+              'ALTER TABLE payments ADD CONSTRAINT chk_payments_method_details CHECK ((method = ''CASH'' AND received_by IS NOT NULL AND TRIM(received_by) <> '''' AND card_last4 IS NULL AND approval_code IS NULL AND gcash_reference IS NULL) OR (method = ''CARD'' AND card_last4 IS NOT NULL AND card_last4 REGEXP ''^[0-9]{4}$'' AND approval_code IS NOT NULL AND approval_code REGEXP ''^[A-Za-z0-9]{1,12}$'' AND received_by IS NULL AND gcash_reference IS NULL) OR (method = ''GCASH'' AND gcash_reference IS NOT NULL AND gcash_reference REGEXP ''^[0-9]{13}$'' AND received_by IS NULL AND card_last4 IS NULL AND approval_code IS NULL) OR (method = ''INSURANCE'' AND approval_code IS NOT NULL AND TRIM(approval_code) <> '''' AND card_last4 IS NULL AND gcash_reference IS NULL))',
               'SELECT 1');
 PREPARE stmt FROM @ddl;
 EXECUTE stmt;
@@ -167,6 +173,83 @@ DEALLOCATE PREPARE stmt;
 SET @ddl = IF((SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS
                WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'payments' AND CONSTRAINT_NAME = 'chk_payments_installment') = 0,
               'ALTER TABLE payments ADD CONSTRAINT chk_payments_installment CHECK (installment_months IS NULL OR (installment_months IN (3, 6, 12) AND method = ''CARD'' AND amount >= 10000.00))',
+              'SELECT 1');
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- === New column migrations (safe on every startup) ===
+
+SET @ddl = IF((SELECT COUNT(*) FROM information_schema.COLUMNS
+               WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'appointments' AND COLUMN_NAME = 'status') = 0,
+              'ALTER TABLE appointments ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT ''SCHEDULED''',
+              'SELECT 1');
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @ddl = IF((SELECT COUNT(*) FROM information_schema.COLUMNS
+               WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'appointments' AND COLUMN_NAME = 'payment_method') = 0,
+              'ALTER TABLE appointments ADD COLUMN payment_method VARCHAR(20) NULL',
+              'SELECT 1');
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @ddl = IF((SELECT COUNT(*) FROM information_schema.COLUMNS
+               WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'patients' AND COLUMN_NAME = 'insurance_provider') = 0,
+              'ALTER TABLE patients ADD COLUMN insurance_provider VARCHAR(100) NULL',
+              'SELECT 1');
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @ddl = IF((SELECT COUNT(*) FROM information_schema.COLUMNS
+               WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'appointments' AND COLUMN_NAME = 'ailment') = 0,
+              'ALTER TABLE appointments ADD COLUMN ailment VARCHAR(255) NULL',
+              'SELECT 1');
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Widen approval_code to 100 chars to accommodate insurance claim/LOA references
+SET @ddl = IF((SELECT CHARACTER_MAXIMUM_LENGTH FROM information_schema.COLUMNS
+               WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'payments' AND COLUMN_NAME = 'approval_code') < 100,
+              'ALTER TABLE payments MODIFY COLUMN approval_code VARCHAR(100) NULL',
+              'SELECT 1');
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Drop and recreate chk_payments_method to include INSURANCE (existing DBs have the old 3-value constraint)
+SET @ddl = IF((SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS
+               WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'payments' AND CONSTRAINT_NAME = 'chk_payments_method') > 0,
+              'ALTER TABLE payments DROP CONSTRAINT chk_payments_method',
+              'SELECT 1');
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @ddl = IF((SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS
+               WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'payments' AND CONSTRAINT_NAME = 'chk_payments_method') = 0,
+              'ALTER TABLE payments ADD CONSTRAINT chk_payments_method CHECK (method IN (''CASH'', ''CARD'', ''GCASH'', ''INSURANCE''))',
+              'SELECT 1');
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Drop and recreate chk_payments_method_details to include INSURANCE branch
+SET @ddl = IF((SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS
+               WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'payments' AND CONSTRAINT_NAME = 'chk_payments_method_details') > 0,
+              'ALTER TABLE payments DROP CONSTRAINT chk_payments_method_details',
+              'SELECT 1');
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @ddl = IF((SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS
+               WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'payments' AND CONSTRAINT_NAME = 'chk_payments_method_details') = 0,
+              'ALTER TABLE payments ADD CONSTRAINT chk_payments_method_details CHECK ((method = ''CASH'' AND received_by IS NOT NULL AND TRIM(received_by) <> '''' AND card_last4 IS NULL AND approval_code IS NULL AND gcash_reference IS NULL) OR (method = ''CARD'' AND card_last4 IS NOT NULL AND card_last4 REGEXP ''^[0-9]{4}$'' AND approval_code IS NOT NULL AND approval_code REGEXP ''^[A-Za-z0-9]{1,12}$'' AND received_by IS NULL AND gcash_reference IS NULL) OR (method = ''GCASH'' AND gcash_reference IS NOT NULL AND gcash_reference REGEXP ''^[0-9]{13}$'' AND received_by IS NULL AND card_last4 IS NULL AND approval_code IS NULL) OR (method = ''INSURANCE'' AND approval_code IS NOT NULL AND TRIM(approval_code) <> '''' AND card_last4 IS NULL AND gcash_reference IS NULL))',
               'SELECT 1');
 PREPARE stmt FROM @ddl;
 EXECUTE stmt;

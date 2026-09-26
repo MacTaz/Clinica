@@ -1,11 +1,19 @@
 import { useEffect, useState } from "react";
-import { getDoctors, registerDoctor, deleteDoctor } from "../../api/doctors.js";
-import { getSpecializations } from "../../api/specializations.js";
+import { getDoctors, registerDoctor, updateDoctor, deleteDoctor } from "../../api/doctors.js";
 import { getDoctorScheduleStatus, setDoctorScheduleStatus, statusToSlug, STATUS_OPTIONS } from "../../utils/doctorStatus.js";
 import LoadingSpinner from "../../components/LoadingSpinner.jsx";
 import ErrorBanner from "../../components/ErrorBanner.jsx";
 
 const DAYS_OF_WEEK = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"];
+const DAY_ORDER = {
+  MONDAY: 1,
+  TUESDAY: 2,
+  WEDNESDAY: 3,
+  THURSDAY: 4,
+  FRIDAY: 5,
+  SATURDAY: 6,
+  SUNDAY: 7,
+};
 
 const DEFAULT_SCHEDULE_ROW = {
   dayOfWeek: "MONDAY",
@@ -52,14 +60,23 @@ function findScheduleConflicts(schedules) {
   return { conflicts, conflictMessages };
 }
 
+const JAVA_DAY_NAMES = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
+
 export default function DoctorDirectory() {
+  const currentDayName = JAVA_DAY_NAMES[new Date().getDay()];
+  const [selectedDayFilter, setSelectedDayFilter] = useState(currentDayName);
   const [doctors, setDoctors] = useState(null);
-  const [specializations, setSpecializations] = useState([]);
   const [error, setError] = useState(null);
   const [modalError, setModalError] = useState(null);
   const [showModal, setShowModal] = useState(false);
+  const [modalMode, setModalMode] = useState("REGISTER"); // "REGISTER" | "EDIT_DOCTOR" | "EDIT_SCHEDULE"
+  const [editingDoctor, setEditingDoctor] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [, setStatusVersion] = useState(0);
+
+  // Edit Mode toggles for top-right edit buttons
+  const [isEditingDoctors, setIsEditingDoctors] = useState(false);
+  const [isEditingSchedules, setIsEditingSchedules] = useState(false);
 
   useEffect(() => {
     function onStatusChange() {
@@ -81,10 +98,10 @@ export default function DoctorDirectory() {
     findScheduleConflicts(formData.schedules);
 
   function loadData() {
-    Promise.all([getDoctors(), getSpecializations().catch(() => [])])
-      .then(([docs, specs]) => {
+    getDoctors()
+      .then((docs) => {
         setDoctors(docs);
-        setSpecializations(specs);
+        setError(null);
       })
       .catch((err) => setError(err.message));
   }
@@ -127,7 +144,9 @@ export default function DoctorDirectory() {
     });
   }
 
-  function handleOpenModal() {
+  function handleOpenRegisterModal() {
+    setModalMode("REGISTER");
+    setEditingDoctor(null);
     setModalError(null);
     setFormData({
       firstName: "",
@@ -139,7 +158,59 @@ export default function DoctorDirectory() {
     setShowModal(true);
   }
 
-  async function handleRegister(e) {
+  function handleOpenEditDoctorModal(doctor) {
+    setModalMode("EDIT_DOCTOR");
+    setEditingDoctor(doctor);
+    setModalError(null);
+    const nameParts = (doctor.name || "").replace(/^Dr\.?\s*/i, "").split(" ");
+    const firstName = nameParts[0] || "";
+    const lastName = nameParts.slice(1).join(" ") || "";
+
+    const existingSchedules = doctor.schedules && doctor.schedules.length > 0
+      ? doctor.schedules.map((s) => ({
+          dayOfWeek: s.dayOfWeek,
+          startTime: s.startTime?.substring(0, 5) || "09:00",
+          endTime: s.endTime?.substring(0, 5) || "12:00",
+        }))
+      : [{ ...DEFAULT_SCHEDULE_ROW }];
+
+    setFormData({
+      firstName,
+      lastName,
+      age: String(doctor.age || ""),
+      contact: doctor.contact || "",
+      schedules: existingSchedules,
+    });
+    setShowModal(true);
+  }
+
+  function handleOpenEditScheduleModal(doctor) {
+    setModalMode("EDIT_SCHEDULE");
+    setEditingDoctor(doctor);
+    setModalError(null);
+    const nameParts = (doctor.name || "").replace(/^Dr\.?\s*/i, "").split(" ");
+    const firstName = nameParts[0] || "";
+    const lastName = nameParts.slice(1).join(" ") || "";
+
+    const existingSchedules = doctor.schedules && doctor.schedules.length > 0
+      ? doctor.schedules.map((s) => ({
+          dayOfWeek: s.dayOfWeek,
+          startTime: s.startTime?.substring(0, 5) || "09:00",
+          endTime: s.endTime?.substring(0, 5) || "12:00",
+        }))
+      : [{ ...DEFAULT_SCHEDULE_ROW }];
+
+    setFormData({
+      firstName,
+      lastName,
+      age: String(doctor.age || ""),
+      contact: doctor.contact || "",
+      schedules: existingSchedules,
+    });
+    setShowModal(true);
+  }
+
+  async function handleSaveDoctor(e) {
     e.preventDefault();
     const cleanFirst = formData.firstName.trim();
     const cleanLast = formData.lastName.trim();
@@ -154,7 +225,7 @@ export default function DoctorDirectory() {
       return;
     }
 
-    // Validate that start time is before end time for each block
+    // Validate start time is before end time
     for (const [idx, s] of formData.schedules.entries()) {
       if (s.startTime >= s.endTime) {
         setModalError(`Schedule row #${idx + 1}: Start time (${s.startTime}) must be earlier than End time (${s.endTime}).`);
@@ -162,37 +233,42 @@ export default function DoctorDirectory() {
       }
     }
 
-    // Validate that no duplicate or overlapping schedules exist on the same day
+    // Validate no overlapping schedules
     const { conflictMessages } = findScheduleConflicts(formData.schedules);
     if (conflictMessages.length > 0) {
       setModalError(conflictMessages[0]);
       return;
     }
 
-    // Format doctor's name with title "Dr." on the record
     const formattedName = cleanFirst.toLowerCase().startsWith("dr.") || cleanFirst.toLowerCase().startsWith("dr ")
       ? `${cleanFirst} ${cleanLast}`.trim()
       : `Dr. ${cleanFirst} ${cleanLast}`.trim();
 
+    const payload = {
+      name: formattedName,
+      age: parseInt(formData.age, 10),
+      contact: formData.contact,
+      specializationId: 1, // Default general clinical practice
+      salary: 0,
+      schedules: formData.schedules.map((s) => ({
+        dayOfWeek: s.dayOfWeek,
+        startTime: s.startTime.length === 5 ? `${s.startTime}:00` : s.startTime,
+        endTime: s.endTime.length === 5 ? `${s.endTime}:00` : s.endTime,
+      })),
+    };
+
     try {
       setSubmitting(true);
       setModalError(null);
-      await registerDoctor({
-        name: formattedName,
-        age: parseInt(formData.age, 10),
-        contact: formData.contact,
-        specializationId: specializations[0]?.id || 1,
-        salary: 0,
-        schedules: formData.schedules.map((s) => ({
-          dayOfWeek: s.dayOfWeek,
-          startTime: s.startTime.length === 5 ? `${s.startTime}:00` : s.startTime,
-          endTime: s.endTime.length === 5 ? `${s.endTime}:00` : s.endTime,
-        })),
-      });
+      if (editingDoctor) {
+        await updateDoctor(editingDoctor.id, payload);
+      } else {
+        await registerDoctor(payload);
+      }
       setShowModal(false);
       loadData();
     } catch (err) {
-      setModalError(err.message || "Failed to register doctor");
+      setModalError(err.message || "Failed to save doctor");
     } finally {
       setSubmitting(false);
     }
@@ -211,119 +287,333 @@ export default function DoctorDirectory() {
   if (error && !doctors) return <ErrorBanner message={error} />;
   if (!doctors) return <LoadingSpinner />;
 
+  // Flatten and sort all doctor schedules for Table 2
+  const allSchedulesList = [];
+  doctors.forEach((doc) => {
+    if (doc.schedules && doc.schedules.length > 0) {
+      doc.schedules.forEach((s, sIdx) => {
+        allSchedulesList.push({
+          doctor: doc,
+          schedule: s,
+          scheduleIndex: sIdx,
+        });
+      });
+    } else {
+      allSchedulesList.push({
+        doctor: doc,
+        schedule: null,
+        scheduleIndex: 0,
+      });
+    }
+  });
+
+  allSchedulesList.sort((a, b) => {
+    if (a.doctor.name !== b.doctor.name) {
+      return a.doctor.name.localeCompare(b.doctor.name);
+    }
+    const orderA = a.schedule ? (DAY_ORDER[a.schedule.dayOfWeek] || 99) : 99;
+    const orderB = b.schedule ? (DAY_ORDER[b.schedule.dayOfWeek] || 99) : 99;
+    return orderA - orderB;
+  });
+
+  const filteredSchedulesList = allSchedulesList.filter((item) => {
+    if (selectedDayFilter === "ALL") return true;
+    return item.schedule?.dayOfWeek === selectedDayFilter;
+  });
+
   return (
     <section className="section-container">
       <div className="section-header-row">
         <div>
           <h2>Doctors Directory</h2>
-          <p className="section-subtext">Manage clinical staff and weekly duty schedules.</p>
+          <p className="section-subtext">Manage registered doctors, consultation hours, and weekly duty schedules.</p>
         </div>
-        <button className="primary-btn" onClick={handleOpenModal}>
+        <button className="primary-btn" onClick={handleOpenRegisterModal}>
           + Register Doctor
         </button>
       </div>
 
       {error && <ErrorBanner message={error} />}
 
+      {/* ========================================================================= */}
+      {/* TABLE 1: DOCTORS LIST (TOP)                                              */}
+      {/* ========================================================================= */}
       <div className="dash-card">
+        <div className="dash-card-header">
+          <div className="dash-card-header-left">
+            <h3 className="dash-card-title">Doctors List</h3>
+            <span className="section-subtext">Registered clinical practitioners and contact details</span>
+          </div>
+          <div className="dash-card-header-actions">
+            <button
+              type="button"
+              className={`edit-toggle-btn ${isEditingDoctors ? "active" : ""}`}
+              onClick={() => setIsEditingDoctors(!isEditingDoctors)}
+              title="Toggle edit mode to update doctor details or remove doctors"
+            >
+              {isEditingDoctors ? "✓ Done Editing" : "✎ Edit Doctors"}
+            </button>
+          </div>
+        </div>
+
+        {isEditingDoctors && (
+          <div className="edit-mode-banner">
+            <span><strong>Edit Mode Active:</strong> Click <em>Edit</em> on any doctor below to update their name, age, or contact information.</span>
+            <button
+              type="button"
+              className="secondary-btn-sm"
+              onClick={() => setIsEditingDoctors(false)}
+            >
+              Close Edit Mode
+            </button>
+          </div>
+        )}
+
         {doctors.length === 0 ? (
           <p className="empty-notice">No doctors registered yet. Click "+ Register Doctor" to add one.</p>
         ) : (
           <div className="table-responsive">
             <table className="dash-table">
               <colgroup>
-                <col style={{ width: "22%" }} />
-                <col style={{ width: "10%" }} />
-                <col style={{ width: "18%" }} />
-                <col style={{ width: "22%" }} />
-                <col style={{ width: "18%" }} />
-                <col style={{ width: "10%" }} />
+                <col style={{ width: "30%" }} />
+                <col style={{ width: "12%" }} />
+                <col style={{ width: "26%" }} />
+                <col style={{ width: isEditingDoctors ? "20%" : "32%" }} />
+                {isEditingDoctors && <col style={{ width: "12%" }} />}
               </colgroup>
               <thead>
                 <tr>
-                  <th>Name</th>
+                  <th>Doctor Name</th>
                   <th>Age</th>
-                  <th>Contact</th>
-                  <th>Weekly Schedules</th>
-                  <th>Availability Status</th>
-                  <th className="th-actions">Actions</th>
+                  <th>Contact Number</th>
+                  <th>Duty Schedule Summary</th>
+                  {isEditingDoctors && <th className="th-actions">Actions</th>}
                 </tr>
               </thead>
               <tbody>
-                {doctors.map((d) => (
-                  <tr key={d.id}>
-                    <td className="cell-doctor-name">{d.name}</td>
-                    <td>{d.age}</td>
-                    <td>{d.contact}</td>
-                    <td>
-                      {d.schedules && d.schedules.length > 0 ? (
-                        <div className="schedules-vertical-list">
-                          {d.schedules.map((s, idx) => (
-                            <div key={idx} className="schedule-pill">
-                              <strong>{s.dayOfWeek?.substring(0, 3)}:</strong> {s.startTime?.substring(0, 5)}–{s.endTime?.substring(0, 5)}
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <span className="text-muted">No schedule</span>
-                      )}
-                    </td>
-                    <td>
-                      {d.schedules && d.schedules.length > 0 ? (
-                        <div className="status-vertical-list">
-                          {d.schedules.map((s, idx) => {
-                            const currentStatus = getDoctorScheduleStatus(d, s, idx);
-                            const slug = statusToSlug(currentStatus);
+                {doctors.map((d) => {
+                  const scheduleCount = d.schedules ? d.schedules.length : 0;
+                  const daysList = d.schedules && d.schedules.length > 0
+                    ? Array.from(new Set(d.schedules.map((s) => s.dayOfWeek?.substring(0, 3)))).join(", ")
+                    : "No active days";
 
-                            return (
-                              <select
-                                key={idx}
-                                className={`status-select status-select-${slug}`}
-                                value={currentStatus}
-                                onChange={(e) => {
-                                  setDoctorScheduleStatus(d.id, s, idx, e.target.value);
-                                  setStatusVersion((v) => v + 1);
-                                }}
-                              >
-                                <option value="">Select Status</option>
-                                {STATUS_OPTIONS.map((opt) => (
-                                  <option key={opt.value} value={opt.value}>
-                                    {opt.label}
-                                  </option>
-                                ))}
-                              </select>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <span className="text-muted">—</span>
+                  return (
+                    <tr key={d.id}>
+                      <td className="cell-doctor-name">{d.name}</td>
+                      <td>{d.age} yrs old</td>
+                      <td>{d.contact}</td>
+                      <td>
+                        {scheduleCount > 0 ? (
+                          <span>
+                            <strong>{scheduleCount} shift{scheduleCount > 1 ? "s" : ""}</strong>{" "}
+                            <span className="text-muted">({daysList})</span>
+                          </span>
+                        ) : (
+                          <span className="text-muted">No schedule configured</span>
+                        )}
+                      </td>
+                      {isEditingDoctors && (
+                        <td className="cell-actions">
+                          <button
+                            type="button"
+                            className="secondary-btn-sm"
+                            onClick={() => handleOpenEditDoctorModal(d)}
+                            title="Edit Doctor Details"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            className="danger-btn-sm"
+                            onClick={() => handleDelete(d.id)}
+                            title="Delete Doctor"
+                          >
+                            Delete
+                          </button>
+                        </td>
                       )}
-                    </td>
-                    <td className="cell-actions">
-                      <button className="danger-btn-sm" onClick={() => handleDelete(d.id)}>
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
       </div>
 
-      {/* Register Doctor Modal */}
+      {/* ========================================================================= */}
+      {/* TABLE 2: DOCTOR SCHEDULES & AVAILABILITY (BOTTOM)                        */}
+      {/* ========================================================================= */}
+      <div className="dash-card">
+        <div className="dash-card-header">
+          <div className="dash-card-header-left">
+            <h3 className="dash-card-title">Doctor Schedules &amp; Availability</h3>
+            <span className="section-subtext">Weekly consultation shifts, duty hours, and real-time availability status</span>
+          </div>
+          <div className="dash-card-header-actions">
+            <div className="schedule-filter-dropdown-wrap">
+              <label className="schedule-filter-label">Day:</label>
+              <select
+                className="schedule-filter-select"
+                value={selectedDayFilter}
+                onChange={(e) => setSelectedDayFilter(e.target.value)}
+              >
+                <option value={currentDayName}>
+                  {currentDayName.charAt(0) + currentDayName.slice(1).toLowerCase()} (Today)
+                </option>
+                <option value="ALL">🗓 All Days (Mon–Sun)</option>
+                {DAYS_OF_WEEK.filter((d) => d !== currentDayName).map((day) => (
+                  <option key={day} value={day}>
+                    {day.charAt(0) + day.slice(1).toLowerCase()}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button
+              type="button"
+              className={`edit-toggle-btn ${isEditingSchedules ? "active" : ""}`}
+              onClick={() => setIsEditingSchedules(!isEditingSchedules)}
+              title="Toggle edit mode to adjust doctor schedules and duty shifts"
+            >
+              {isEditingSchedules ? "✓ Done Editing" : "✎ Edit Schedules"}
+            </button>
+          </div>
+        </div>
+
+        {isEditingSchedules && (
+          <div className="edit-mode-banner">
+            <span><strong>Edit Mode Active:</strong> Click <em>Adjust Schedule</em> on any doctor below to add/remove duty days or modify consultation hours.</span>
+            <button
+              type="button"
+              className="secondary-btn-sm"
+              onClick={() => setIsEditingSchedules(false)}
+            >
+              Close Edit Mode
+            </button>
+          </div>
+        )}
+
+        {doctors.length === 0 ? (
+          <p className="empty-notice">No doctor schedules found. Register a doctor to create schedules.</p>
+        ) : filteredSchedulesList.length === 0 ? (
+          <p className="empty-notice">
+            No doctor duty shifts configured for{" "}
+            <strong>
+              {selectedDayFilter === "ALL"
+                ? "any day"
+                : selectedDayFilter.charAt(0) + selectedDayFilter.slice(1).toLowerCase() + (selectedDayFilter === currentDayName ? " (Today)" : "")}
+            </strong>
+            . Select <em>"All Days"</em> or another day from the dropdown above to view other duty shifts.
+          </p>
+        ) : (
+          <div className="table-responsive">
+            <table className="dash-table">
+              <colgroup>
+                <col style={{ width: "25%" }} />
+                <col style={{ width: "18%" }} />
+                <col style={{ width: "25%" }} />
+                <col style={{ width: isEditingSchedules ? "18%" : "32%" }} />
+                {isEditingSchedules && <col style={{ width: "14%" }} />}
+              </colgroup>
+              <thead>
+                <tr>
+                  <th>Doctor Name</th>
+                  <th>Day of Week</th>
+                  <th>Duty Hours</th>
+                  <th>Availability Status</th>
+                  {isEditingSchedules && <th className="th-actions">Actions</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {filteredSchedulesList.map((item, idx) => {
+                  const { doctor, schedule, scheduleIndex } = item;
+                  const currentStatus = schedule ? getDoctorScheduleStatus(doctor, schedule, scheduleIndex) : "";
+                  const slug = statusToSlug(currentStatus);
+
+                  return (
+                    <tr key={`${doctor.id}-${schedule?.id || idx}`}>
+                      <td className="cell-doctor-name">{doctor.name}</td>
+                      <td>
+                        {schedule ? (
+                          <span className="day-badge">
+                            {schedule.dayOfWeek}
+                          </span>
+                        ) : (
+                          <span className="text-muted">—</span>
+                        )}
+                      </td>
+                      <td>
+                        {schedule ? (
+                          <span className="time-range-badge">
+                            🕒 {schedule.startTime?.substring(0, 5)} – {schedule.endTime?.substring(0, 5)}
+                          </span>
+                        ) : (
+                          <span className="text-muted">No schedule set</span>
+                        )}
+                      </td>
+                      <td>
+                        {schedule ? (
+                          <select
+                            className={`status-select status-select-${slug}`}
+                            value={currentStatus}
+                            onChange={(e) => {
+                              setDoctorScheduleStatus(doctor.id, schedule, scheduleIndex, e.target.value);
+                              setStatusVersion((v) => v + 1);
+                            }}
+                          >
+                            <option value="">Select Status</option>
+                            {STATUS_OPTIONS.map((opt) => (
+                              <option key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span className="text-muted">—</span>
+                        )}
+                      </td>
+                      {isEditingSchedules && (
+                        <td className="cell-actions">
+                          <button
+                            type="button"
+                            className="secondary-btn-sm"
+                            onClick={() => handleOpenEditScheduleModal(doctor)}
+                            title="Adjust weekly schedule for this doctor"
+                          >
+                            Adjust Schedule
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* ========================================================================= */}
+      {/* MODAL: REGISTER / EDIT DOCTOR / ADJUST SCHEDULES                          */}
+      {/* ========================================================================= */}
       {showModal && (
         <div className="modal-backdrop">
           <div className="modal-content modal-large">
             <div className="modal-header">
-              <h3>Register New Doctor</h3>
+              <h3>
+                {modalMode === "REGISTER"
+                  ? "Register New Doctor"
+                  : modalMode === "EDIT_SCHEDULE"
+                  ? `Adjust ${editingDoctor?.name}'s Schedules`
+                  : `Edit ${editingDoctor?.name}'s Profile`}
+              </h3>
               <button className="modal-close-btn" onClick={() => setShowModal(false)}>✕</button>
             </div>
 
             {modalError && <ErrorBanner message={modalError} />}
 
-            <form onSubmit={handleRegister} className="form-layout">
+            <form onSubmit={handleSaveDoctor} className="form-layout">
+              {/* Profile fields (shown in Register and Edit Doctor mode) */}
               <div className="form-row">
                 <div className="form-group">
                   <label>First Name *</label>
@@ -346,6 +636,7 @@ export default function DoctorDirectory() {
                   />
                 </div>
               </div>
+
               <div className="form-row">
                 <div className="form-group">
                   <label>Age *</label>
@@ -385,16 +676,16 @@ export default function DoctorDirectory() {
                 </div>
               </div>
 
-              {/* Multiple Weekly Schedules Section */}
+              {/* Adjustable Weekly Schedules Section */}
               <div className="form-group">
                 <div className="schedule-header-row">
-                  <label>Weekly Duty Schedules *</label>
+                  <label>Weekly Duty Schedules (Adjustable) *</label>
                   <button
                     type="button"
                     className="secondary-btn-sm"
                     onClick={handleAddScheduleRow}
                   >
-                    + Add Schedule Day
+                    + Add Day
                   </button>
                 </div>
 
@@ -460,7 +751,7 @@ export default function DoctorDirectory() {
                   className="primary-btn"
                   disabled={submitting || scheduleConflictMessages.length > 0}
                 >
-                  {submitting ? "Saving..." : "Save Doctor"}
+                  {submitting ? "Saving..." : editingDoctor ? "Save Changes" : "Register Doctor"}
                 </button>
               </div>
             </form>

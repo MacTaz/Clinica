@@ -5,7 +5,7 @@ import { getPayments, recordPayment } from "../../api/payments.js";
 import LoadingSpinner from "../../components/LoadingSpinner.jsx";
 import ErrorBanner from "../../components/ErrorBanner.jsx";
 
-const PAYMENT_METHODS = ["CASH", "CARD", "GCASH"];
+const PAYMENT_METHODS = ["CASH", "CARD", "GCASH", "INSURANCE"];
 
 // Method-specific fields; only the selected method's fields are sent (others must be null)
 const EMPTY_DETAILS = { receivedBy: "", cardLast4: "", approvalCode: "", gcashReference: "" };
@@ -24,6 +24,7 @@ const formatDetails = (p) => {
     return `Card ••••${p.cardLast4}, Approval: ${p.approvalCode}${term}`;
   }
   if (p.method === "GCASH" && p.gcashReference) return `Ref: ${p.gcashReference}`;
+  if (p.method === "INSURANCE" && p.approvalCode) return `Claim/Auth: ${p.approvalCode}`;
   return "—";
 };
 
@@ -83,8 +84,15 @@ export default function PaymentsScreen() {
       if (!/^[A-Za-z0-9]{1,12}$/.test(approvalCode)) return { error: "Approval code must be 1 to 12 letters or digits." };
       return { cardLast4, approvalCode };
     }
-    if (!/^\d{13}$/.test(gcashReference)) return { error: "GCash reference number must be exactly 13 digits." };
-    return { gcashReference };
+    if (method === "GCASH") {
+      if (!/^\d{13}$/.test(gcashReference)) return { error: "GCash reference number must be exactly 13 digits." };
+      return { gcashReference };
+    }
+    if (method === "INSURANCE") {
+      if (!approvalCode) return { error: "Please enter the insurance claim or approval reference code." };
+      return { approvalCode };
+    }
+    return {};
   };
 
   const handleRecordPayment = async (e) => {
@@ -108,7 +116,7 @@ export default function PaymentsScreen() {
       setFormError(null);
       await recordPayment(parseInt(selectedAppointmentId, 10), {
         amount: Number(amount),
-        method, // Already uppercase: CASH / CARD / GCASH
+        method, // CASH / CARD / GCASH / INSURANCE
         ...methodDetails,
         ...(installmentAvailable && installmentMonths ? { installmentMonths: Number(installmentMonths) } : {}),
       });
@@ -128,9 +136,11 @@ export default function PaymentsScreen() {
   if (error && (!appointments || !payments)) return <ErrorBanner message={error} />;
   if (!appointments || !payments) return <LoadingSpinner />;
 
-  // One payment per appointment — only appointments without a payment can be selected
+  // One payment per appointment — only COMPLETED appointments without a payment can be selected
   const paidAppointmentIds = new Set(payments.map((p) => p.appointmentId));
-  const unpaidAppointments = appointments.filter((a) => !paidAppointmentIds.has(a.id));
+  const unpaidAppointments = appointments.filter(
+    (a) => a.status === "COMPLETED" && !paidAppointmentIds.has(a.id)
+  );
   const hasUnpaidAppointment = unpaidAppointments.length > 0;
 
   // Submit is enabled once required fields are filled; formats are checked on submit so errors are shown
@@ -138,6 +148,7 @@ export default function PaymentsScreen() {
     CASH: details.receivedBy.trim() !== "",
     CARD: details.cardLast4.trim() !== "" && details.approvalCode.trim() !== "",
     GCASH: details.gcashReference.trim() !== "",
+    INSURANCE: details.approvalCode.trim() !== "",
   }[method];
   const canSubmit = selectedAppointmentId !== "" && Number(amount) > 0 && methodFieldsFilled;
 
@@ -150,7 +161,7 @@ export default function PaymentsScreen() {
       <div className="section-header-row">
         <div>
           <h2>Payments</h2>
-          <p className="section-subtext">Record appointment payments and review the payment history.</p>
+          <p className="section-subtext">Record appointment payments, process insurance claims, and review payment history.</p>
         </div>
       </div>
 
@@ -167,7 +178,17 @@ export default function PaymentsScreen() {
             <label>Appointment *</label>
             <select
               value={selectedAppointmentId}
-              onChange={(e) => setSelectedAppointmentId(e.target.value)}
+              onChange={(e) => {
+                const apptId = e.target.value;
+                setSelectedAppointmentId(apptId);
+                if (apptId) {
+                  const appt = appointments.find((a) => String(a.id) === String(apptId));
+                  if (appt && appt.paymentMethod && PAYMENT_METHODS.includes(appt.paymentMethod)) {
+                    setMethod(appt.paymentMethod);
+                    setDetails(EMPTY_DETAILS);
+                  }
+                }
+              }}
             >
               {hasUnpaidAppointment ? (
                 <>
@@ -175,7 +196,7 @@ export default function PaymentsScreen() {
                   {unpaidAppointments.map((a) => (
                     <option key={a.id} value={a.id}>
                       #{a.id} — {a.patient?.name} with {a.doctor?.name}, {a.appointmentDate}{" "}
-                      {a.startTime?.substring(0, 5)}
+                      {a.startTime?.substring(0, 5)}{a.paymentMethod ? ` [Set: ${a.paymentMethod}]` : ""}
                     </option>
                   ))}
                 </>
@@ -186,7 +207,9 @@ export default function PaymentsScreen() {
               )}
             </select>
             {!hasUnpaidAppointment && (
-              <small className="section-subtext">Book a new appointment to record a payment.</small>
+              <small className="section-subtext">
+                No completed appointments awaiting payment. Mark an appointment as <strong>Done</strong> in the Appointments tab first.
+              </small>
             )}
           </div>
 
@@ -209,7 +232,7 @@ export default function PaymentsScreen() {
               <select value={method} onChange={handleMethodChange}>
                 {PAYMENT_METHODS.map((m) => (
                   <option key={m} value={m}>
-                    {m}
+                    {m === "INSURANCE" ? "INSURANCE (Health Insurance Claim)" : m}
                   </option>
                 ))}
               </select>
@@ -235,7 +258,6 @@ export default function PaymentsScreen() {
               <div className="form-row">
                 <div className="form-group">
                   <label>Card last 4 digits *</label>
-                  {/* No maxLength: truncating a pasted card number would keep its FIRST 4 digits */}
                   <input
                     required
                     type="text"
@@ -307,6 +329,20 @@ export default function PaymentsScreen() {
                 />
               </div>
             </>
+          )}
+
+          {method === "INSURANCE" && (
+            <div className="form-group">
+              <label>Insurance Claim / Approval Reference Code *</label>
+              <input
+                required
+                type="text"
+                placeholder="e.g. PHIL-CLAIM-98234 or Insurance Approval #"
+                value={details.approvalCode}
+                onChange={setDetail("approvalCode")}
+              />
+              <small className="section-subtext">Authorization, LOA, or claim reference number from the insurance provider.</small>
+            </div>
           )}
 
           <div className="modal-actions">

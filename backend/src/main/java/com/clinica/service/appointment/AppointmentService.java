@@ -6,6 +6,7 @@ import com.clinica.exception.InvalidRecordDataException;
 import com.clinica.exception.ResourceNotFoundException;
 import com.clinica.exception.SlotUnavailableException;
 import com.clinica.model.appointment.Appointment;
+import com.clinica.model.appointment.AppointmentStatus;
 import com.clinica.model.doctor.Doctor;
 import com.clinica.model.patient.Patient;
 import com.clinica.repository.appointment.AppointmentRepository;
@@ -83,6 +84,12 @@ public class AppointmentService {
         appointment.setDoctor(doctor);
         appointment.setAppointmentDate(request.appointmentDate());
         appointment.setStartTime(request.startTime());
+        appointment.setStatus(AppointmentStatus.SCHEDULED);
+        if (request.paymentMethod() == null) {
+            throw new InvalidRecordDataException("Payment method is required when booking an appointment.");
+        }
+        appointment.setPaymentMethod(request.paymentMethod());
+        appointment.setAilment(request.ailment() != null && !request.ailment().trim().isEmpty() ? request.ailment().trim() : "General Consultation");
 
         return toResponse(appointmentRepository.save(appointment));
     }
@@ -92,6 +99,17 @@ public class AppointmentService {
         return appointmentRepository.findAll().stream()
                 .map(this::toResponse)
                 .toList();
+    }
+
+    // PATCH /appointments/{id}/complete → marks appointment as COMPLETED, enabling payment recording
+    public AppointmentResponse completeAppointment(Long appointmentId) {
+        Appointment appointment = appointmentRepository.findById(appointmentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Appointment not found"));
+        if (appointment.getStatus() == AppointmentStatus.COMPLETED) {
+            throw new InvalidRecordDataException("Appointment is already marked as completed.");
+        }
+        appointment.setStatus(AppointmentStatus.COMPLETED);
+        return toResponse(appointmentRepository.save(appointment));
     }
 
     // Per API_CONTRACT.md: DELETE /appointments/{id} → 204, also deletes its payment if any
@@ -115,7 +133,10 @@ public class AppointmentService {
                         appointment.getDoctor().getName()
                 ),
                 appointment.getAppointmentDate(),
-                appointment.getStartTime()
+                appointment.getStartTime(),
+                appointment.getAilment() != null ? appointment.getAilment() : "General Consultation",
+                appointment.getStatus().name(),
+                appointment.getPaymentMethod() != null ? appointment.getPaymentMethod().name() : null
         );
     }
 }

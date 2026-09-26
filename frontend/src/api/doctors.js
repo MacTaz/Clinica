@@ -4,6 +4,10 @@ export function registerDoctor(doctor) {
   return api.post("/doctors", doctor);
 }
 
+export function updateDoctor(doctorId, doctor) {
+  return api.put(`/doctors/${doctorId}`, doctor);
+}
+
 export function getDoctors() {
   return api.get("/doctors");
 }

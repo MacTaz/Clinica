@@ -46,8 +46,8 @@ public class Payment {
     @Column(name = "card_last4", length = 4)
     private String cardLast4; // CARD: last 4 digits only, never the full card number
 
-    @Column(name = "approval_code", length = 12)
-    private String approvalCode; // CARD: from the POS terminal receipt
+    @Column(name = "approval_code", length = 100)
+    private String approvalCode; // CARD: from the POS terminal receipt; INSURANCE: claim/LOA reference
 
     @Column(name = "gcash_reference", length = 13)
     private String gcashReference; // GCASH

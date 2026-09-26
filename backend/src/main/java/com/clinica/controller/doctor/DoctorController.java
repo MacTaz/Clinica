@@ -40,6 +40,12 @@ public class DoctorController {
         return doctorService.getAllDoctors();
     }
 
+    @PutMapping("/{id}")
+    public ResponseEntity<DoctorResponse> updateDoctor(
+            @PathVariable Long id, @Valid @RequestBody DoctorRequest request) {
+        return ResponseEntity.ok(doctorService.updateDoctor(id, request));
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteDoctor(@PathVariable Long id) {
         doctorService.deleteDoctor(id);

@@ -12,6 +12,11 @@ export function addMedicalHistory(patientId, entry) {
   return api.post(`/patients/${patientId}/history`, { entry });
 }
 
+export function updatePatient(patientId, patient) {
+  return api.put(`/patients/${patientId}`, patient);
+}
+
 export function deletePatient(patientId) {
   return api.del(`/patients/${patientId}`);
 }
+

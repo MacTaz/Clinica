@@ -7,5 +7,8 @@ public record PatientRequest(
         @NotBlank String name,
         @Min(0) int age,
         @NotBlank String contact,
-        String ailment) {
+        String ailment,
+        String insuranceProvider, // Optional; null = uninsured
+        String medicalBackground // Optional; pre-existing conditions, notes
+) {
 }

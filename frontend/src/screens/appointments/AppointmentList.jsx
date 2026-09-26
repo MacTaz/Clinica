@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getAppointments, cancelAppointment, getAvailability, bookAppointment } from "../../api/appointments.js";
+import { getAppointments, cancelAppointment, completeAppointment, getAvailability, bookAppointment } from "../../api/appointments.js";
 import { getPatients } from "../../api/patients.js";
 import { getSpecializations } from "../../api/specializations.js";
 import { getDoctors } from "../../api/doctors.js";
@@ -7,6 +7,13 @@ import LoadingSpinner from "../../components/LoadingSpinner.jsx";
 import ErrorBanner from "../../components/ErrorBanner.jsx";
 
 const DAYS_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const PAYMENT_METHODS = ["CASH", "CARD", "GCASH", "INSURANCE"];
+
+const STATUS_LABELS = {
+  SCHEDULED: { label: "Scheduled", className: "status-scheduled" },
+  COMPLETED: { label: "Completed", className: "status-completed" },
+  PAID: { label: "Paid", className: "status-paid" },
+};
 
 export default function AppointmentList() {
   const [appointments, setAppointments] = useState(null);
@@ -17,6 +24,7 @@ export default function AppointmentList() {
   const [error, setError] = useState(null);
   const [bookingError, setBookingError] = useState(null);
   const [cancelingId, setCancelingId] = useState(null);
+  const [completingId, setCompletingId] = useState(null);
 
   // Booking Modal State
   const [showModal, setShowModal] = useState(false);
@@ -24,6 +32,7 @@ export default function AppointmentList() {
   const [patientSearch, setPatientSearch] = useState("");
   const [selectedPatientId, setSelectedPatientId] = useState("");
   const [bookingAilment, setBookingAilment] = useState("");
+  const [bookingPaymentMethod, setBookingPaymentMethod] = useState("CASH");
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0]);
   const [availableDoctors, setAvailableDoctors] = useState([]);
   const [selectedDoctorId, setSelectedDoctorId] = useState("");
@@ -48,7 +57,6 @@ export default function AppointmentList() {
   };
 
   // Lightweight refresh — only appointments change after a book/cancel action.
-  // Patients, specializations, and doctors are static during a session.
   const refreshAppointments = () => {
     getAppointments()
       .then(setAppointments)
@@ -71,18 +79,18 @@ export default function AppointmentList() {
     if (showModal && selectedDate) {
       setLoadingSlots(true);
       setBookingError(null);
-      const specsToQuery = specializations.length > 0 ? specializations : [{ id: 1 }];
-      Promise.all(specsToQuery.map((s) => getAvailability(s.id, selectedDate).catch(() => [])))
-        .then((results) => {
-          const merged = results.flat();
-          // Deduplicate doctors
-          const uniqueDocs = Array.from(new Map(merged.map((d) => [d.doctorId, d])).values());
-          setAvailableDoctors(uniqueDocs);
-          if (uniqueDocs.length > 0) {
-            setSelectedDoctorId(String(uniqueDocs[0].doctorId));
-            if (uniqueDocs[0].freeSlots && uniqueDocs[0].freeSlots.length > 0) {
-              const firstSlot = uniqueDocs[0].freeSlots[0];
-              setSelectedSlot(typeof firstSlot === "string" ? firstSlot.substring(0, 5) : firstSlot);
+      getAvailability(selectedDate)
+        .then((uniqueDocs) => {
+          setAvailableDoctors(uniqueDocs || []);
+          if (uniqueDocs && uniqueDocs.length > 0) {
+            // Find existing selected doctor or pick the first available doctor
+            const currentDoc = uniqueDocs.find((d) => String(d.doctorId) === String(selectedDoctorId));
+            const activeDoc = currentDoc || uniqueDocs[0];
+            setSelectedDoctorId(String(activeDoc.doctorId));
+
+            if (activeDoc.freeSlots && activeDoc.freeSlots.length > 0) {
+              const firstSlot = activeDoc.freeSlots[0];
+              setSelectedSlot(typeof firstSlot === "string" ? firstSlot.substring(0, 5) : String(firstSlot));
             } else {
               setSelectedSlot("");
             }
@@ -98,20 +106,25 @@ export default function AppointmentList() {
         })
         .finally(() => setLoadingSlots(false));
     }
-  }, [showModal, specializations, selectedDate]);
+  }, [showModal, selectedDate]);
 
   const handleOpenModal = () => {
     setBookingError(null);
     setPatientSearch("");
     setBookingAilment("");
-    if (patients.length > 0 && !selectedPatientId) {
-      setSelectedPatientId(String(patients[0].id));
+    let initialPatientId = selectedPatientId;
+    if (patients.length > 0 && !initialPatientId) {
+      initialPatientId = String(patients[0].id);
+      setSelectedPatientId(initialPatientId);
     }
+    const pat = patients.find((p) => String(p.id) === String(initialPatientId));
+    setBookingPaymentMethod(pat?.insuranceProvider ? "INSURANCE" : "CASH");
     setShowModal(true);
   };
 
   const handleBookAppointment = async (e) => {
-    e.preventDefault();
+    if (e && e.preventDefault) e.preventDefault();
+
     if (!selectedPatientId) {
       setBookingError("Please select a registered patient.");
       return;
@@ -120,12 +133,20 @@ export default function AppointmentList() {
       setBookingError("Please enter the patient's ailment or reason for this visit.");
       return;
     }
-    if (!selectedDoctorId) {
-      setBookingError("No doctor selected or available for this date.");
+    if (!bookingPaymentMethod) {
+      setBookingError("Please select a required payment method (Cash, Card, GCash, or Insurance).");
+      return;
+    }
+    if (!selectedDate) {
+      setBookingError("Please select an appointment date.");
+      return;
+    }
+    if (!selectedDoctorId || availableDoctors.length === 0) {
+      setBookingError(`No doctors are on duty on ${selectedDayOfWeekName} (${selectedDate}). Please choose a date matching doctor duty days.`);
       return;
     }
     if (!selectedSlot) {
-      setBookingError("Please select an available time slot.");
+      setBookingError("Please select an available 30-minute time slot chip.");
       return;
     }
 
@@ -138,6 +159,7 @@ export default function AppointmentList() {
         appointmentDate: selectedDate,
         startTime: selectedSlot.length === 5 ? `${selectedSlot}:00` : selectedSlot,
         ailment: bookingAilment.trim(),
+        paymentMethod: bookingPaymentMethod,
       });
       setShowModal(false);
       refreshAppointments();
@@ -145,6 +167,19 @@ export default function AppointmentList() {
       setBookingError(err.message || "Failed to book appointment");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleComplete = async (id) => {
+    if (!window.confirm("Mark this appointment as completed? This will allow payment to be recorded.")) return;
+    setCompletingId(id);
+    try {
+      await completeAppointment(id);
+      refreshAppointments();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setCompletingId(null);
     }
   };
 
@@ -198,7 +233,7 @@ export default function AppointmentList() {
       <div className="section-header-row">
         <div>
           <h2>Appointments Schedule</h2>
-          <p className="section-subtext">Search registered patients, assign ailments, and schedule clinical reservations.</p>
+          <p className="section-subtext">Search registered patients, assign ailments, select payment method, and schedule reservations.</p>
         </div>
         <button className="primary-btn" onClick={handleOpenModal}>
           + Add Appointment
@@ -232,13 +267,14 @@ export default function AppointmentList() {
           <div className="table-responsive">
             <table className="dash-table">
               <colgroup>
-                <col style={{ width: "7%" }} />
+                <col style={{ width: "5%" }} />
+                <col style={{ width: "15%" }} />
                 <col style={{ width: "18%" }} />
-                <col style={{ width: "22%" }} />
-                <col style={{ width: "18%" }} />
-                <col style={{ width: "17%" }} />
-                <col style={{ width: "10%" }} />
-                <col style={{ width: "8%" }} />
+                <col style={{ width: "15%" }} />
+                <col style={{ width: "15%" }} />
+                <col style={{ width: "11%" }} />
+                <col style={{ width: "9%" }} />
+                <col style={{ width: "12%" }} />
               </colgroup>
               <thead>
                 <tr>
@@ -246,7 +282,8 @@ export default function AppointmentList() {
                   <th>Patient</th>
                   <th>Ailment / Reason</th>
                   <th>Doctor</th>
-                  <th>Date & Time</th>
+                  <th>Date &amp; Time</th>
+                  <th>Payment Method</th>
                   <th>Status</th>
                   <th className="th-actions">Actions</th>
                 </tr>
@@ -255,25 +292,73 @@ export default function AppointmentList() {
                 {filteredAppointments.map((a) => {
                   const patient = patientMap.get(a.patient?.id);
                   const startTime = a.startTime?.substring(0, 5) || "--:--";
+                  const statusInfo = STATUS_LABELS[a.status] || { label: a.status, className: "status-confirmed" };
+                  const isScheduled = a.status === "SCHEDULED" || !a.status;
+                  const isCompleted = a.status === "COMPLETED";
+                  const isPaid = a.status === "PAID";
 
                   return (
                     <tr key={a.id}>
                       <td>#{a.id}</td>
                       <td className="cell-patient-name">{a.patient?.name}</td>
-                      <td>{patient?.ailment || "General Consultation"}</td>
+                      <td>{a.ailment || "General Consultation"}</td>
                       <td className="cell-doctor-name">{a.doctor?.name}</td>
                       <td>{a.appointmentDate} @ {startTime}</td>
                       <td>
-                        <span className="status-confirmed">Confirmed</span>
+                        {a.paymentMethod ? (
+                          <span className="payment-method-tag">{a.paymentMethod}</span>
+                        ) : (
+                          <span className="text-muted">—</span>
+                        )}
+                      </td>
+                      <td>
+                        {isScheduled ? (
+                          <select
+                            className="status-dropdown-select status-scheduled"
+                            value="SCHEDULED"
+                            disabled={completingId === a.id || cancelingId === a.id}
+                            onChange={(e) => {
+                              if (e.target.value === "COMPLETED") handleComplete(a.id);
+                              else if (e.target.value === "CANCEL") handleCancel(a.id);
+                            }}
+                            title="Change status or cancel appointment"
+                          >
+                            <option value="SCHEDULED">Scheduled</option>
+                            <option value="COMPLETED">Mark as Completed</option>
+                            <option value="CANCEL">✕ Cancel Appointment</option>
+                          </select>
+                        ) : isCompleted ? (
+                          <select
+                            className="status-dropdown-select status-completed"
+                            value="COMPLETED"
+                            disabled={completingId === a.id || cancelingId === a.id}
+                            onChange={(e) => {
+                              if (e.target.value === "CANCEL") handleCancel(a.id);
+                            }}
+                            title="Completed — ready for payment in Payments tab"
+                          >
+                            <option value="COMPLETED">Completed</option>
+                            <option value="CANCEL">✕ Cancel Appointment</option>
+                          </select>
+                        ) : (
+                          <span className="status-paid" title="Payment settled">
+                            Paid
+                          </span>
+                        )}
                       </td>
                       <td className="cell-actions">
-                        <button
-                          className="danger-btn-sm"
-                          disabled={cancelingId === a.id}
-                          onClick={() => handleCancel(a.id)}
-                        >
-                          {cancelingId === a.id ? "Canceling..." : "Cancel"}
-                        </button>
+                        {!isPaid && (
+                          <button
+                            className="danger-btn-sm"
+                            disabled={cancelingId === a.id}
+                            onClick={() => handleCancel(a.id)}
+                          >
+                            {cancelingId === a.id ? "Canceling..." : "Cancel"}
+                          </button>
+                        )}
+                        {isPaid && (
+                          <span className="text-muted" style={{ fontSize: "0.78rem" }}>Settled</span>
+                        )}
                       </td>
                     </tr>
                   );
@@ -298,7 +383,7 @@ export default function AppointmentList() {
             <form onSubmit={handleBookAppointment} className="form-layout">
               {/* Patient Search and Selection */}
               <div className="form-group">
-                <label>1. Search & Select Registered Patient *</label>
+                <label>1. Search &amp; Select Registered Patient *</label>
                 {patients.length === 0 ? (
                   <div className="warn-box">
                     <p>No patients registered yet. Please register a patient in the <strong>Patients</strong> tab first.</p>
@@ -316,10 +401,11 @@ export default function AppointmentList() {
                       className="patient-select-box"
                       value={selectedPatientId}
                       onChange={(e) => {
-                        setSelectedPatientId(e.target.value);
-                        const p = patients.find((pat) => String(pat.id) === e.target.value);
-                        if (p && p.ailment && p.ailment !== "None") {
-                          setBookingAilment(p.ailment);
+                        const newId = e.target.value;
+                        setSelectedPatientId(newId);
+                        const pat = patients.find((p) => String(p.id) === String(newId));
+                        if (pat?.insuranceProvider) {
+                          setBookingPaymentMethod("INSURANCE");
                         }
                       }}
                     >
@@ -334,6 +420,9 @@ export default function AppointmentList() {
                       <div className="patient-selected-card">
                         <span className="patient-selected-title">Selected Patient:</span>
                         <strong>{selectedPatientObj.name}</strong> • Age: {selectedPatientObj.age} • Contact: {selectedPatientObj.contact}
+                        {selectedPatientObj.insuranceProvider && (
+                          <span className="insurance-tag"> 🛡 {selectedPatientObj.insuranceProvider}</span>
+                        )}
                       </div>
                     )}
                   </>
@@ -352,8 +441,27 @@ export default function AppointmentList() {
                 />
               </div>
 
+              {/* Required Payment Method */}
               <div className="form-group">
-                <label>3. Date ({selectedDayOfWeekName}) *</label>
+                <label>3. Payment Method * <span className="stat-label">(Required setting before appointment continues)</span></label>
+                <select
+                  required
+                  value={bookingPaymentMethod}
+                  onChange={(e) => setBookingPaymentMethod(e.target.value)}
+                >
+                  {PAYMENT_METHODS.map((m) => (
+                    <option key={m} value={m}>
+                      {m === "INSURANCE"
+                        ? `INSURANCE (${selectedPatientObj?.insuranceProvider || "Health Insurance Claim"})`
+                        : m}
+                    </option>
+                  ))}
+                </select>
+                <small className="section-subtext">Required setting before the appointment proceeds; finalized or claimed when completed.</small>
+              </div>
+
+              <div className="form-group">
+                <label>4. Date ({selectedDayOfWeekName}) *</label>
                 <input
                   type="date"
                   min={new Date().toISOString().split("T")[0]}
@@ -378,24 +486,27 @@ export default function AppointmentList() {
               )}
 
               <div className="form-group">
-                <label>4. Available Doctors & 30-Min Slots</label>
+                <label>5. Available Doctors &amp; 30-Min Slots *</label>
                 {loadingSlots ? (
                   <p className="loading-text">Checking available doctor schedules for {selectedDayOfWeekName}...</p>
                 ) : availableDoctors.length === 0 ? (
                   <div className="warn-box">
-                    <p>No available doctor slots found on <strong>{selectedDayOfWeekName} ({selectedDate})</strong>.</p>
-                    <small>Tip: Choose a date matching the doctor's duty schedule above.</small>
+                    <p>No doctors on duty on <strong>{selectedDayOfWeekName} ({selectedDate})</strong>.</p>
+                    <small>Tip: Select a date that matches one of the doctor duty days listed above.</small>
                   </div>
                 ) : (
                   <>
                     <select
                       value={selectedDoctorId}
                       onChange={(e) => {
-                        setSelectedDoctorId(e.target.value);
-                        const doc = availableDoctors.find((d) => String(d.doctorId) === e.target.value);
+                        const newDocId = e.target.value;
+                        setSelectedDoctorId(newDocId);
+                        const doc = availableDoctors.find((d) => String(d.doctorId) === newDocId);
                         if (doc && doc.freeSlots?.length > 0) {
                           const slot0 = doc.freeSlots[0];
-                          setSelectedSlot(typeof slot0 === "string" ? slot0.substring(0, 5) : slot0);
+                          setSelectedSlot(typeof slot0 === "string" ? slot0.substring(0, 5) : String(slot0));
+                        } else {
+                          setSelectedSlot("");
                         }
                       }}
                     >
@@ -438,7 +549,7 @@ export default function AppointmentList() {
                 <button
                   type="submit"
                   className="primary-btn"
-                  disabled={submitting || availableDoctors.length === 0 || !selectedSlot || !bookingAilment.trim() || !selectedPatientId}
+                  disabled={submitting}
                 >
                   {submitting ? "Booking..." : "Confirm Appointment"}
                 </button>

@@ -1,47 +1,13 @@
 import { useEffect, useState } from "react";
-import { getAppointments } from "../../api/appointments.js";
+import { getAppointments, completeAppointment, cancelAppointment } from "../../api/appointments.js";
 import { getPatients } from "../../api/patients.js";
 import { getDoctors } from "../../api/doctors.js";
-import { getDoctorScheduleStatus, statusToSlug } from "../../utils/doctorStatus.js";
+import { getDoctorScheduleStatus, setDoctorScheduleStatus, statusToSlug, STATUS_OPTIONS } from "../../utils/doctorStatus.js";
 import LoadingSpinner from "../../components/LoadingSpinner.jsx";
 import ErrorBanner from "../../components/ErrorBanner.jsx";
 
-function formatStatusClass(status) {
-  const s = (status || "").toLowerCase();
-  if (s.includes("confirm") || s.includes("in")) return "status-confirmed";
-  if (s.includes("cancel")) return "status-canceled";
-  if (s.includes("ongoing")) return "status-ongoing";
-  if (s.includes("late")) return "status-late";
-  return "status-neutral";
-}
-
 // Day names matching Java's DayOfWeek enum (Sunday = index 0)
 const JAVA_DAY_NAMES = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
-
-function getDoctorScheduleSummary(schedules) {
-  if (!schedules || schedules.length === 0) return "No schedule set";
-  return schedules
-    .map((s) => `${s.dayOfWeek?.substring(0, 3)} ${(s.startTime || "").substring(0, 5)}-${(s.endTime || "").substring(0, 5)}`)
-    .join(", ");
-}
-
-/**
- * Returns "On Duty" if the doctor has a schedule block for today that
- * spans the current local time, otherwise "Off Duty".
- */
-function getDoctorDutyStatus(schedules) {
-  if (!schedules || schedules.length === 0) return "Off Duty";
-  const now = new Date();
-  const todayName = JAVA_DAY_NAMES[now.getDay()];
-  const currentTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-  const isOnDuty = schedules.some((s) => {
-    if (s.dayOfWeek !== todayName) return false;
-    const start = (s.startTime || "").substring(0, 5);
-    const end = (s.endTime || "").substring(0, 5);
-    return currentTime >= start && currentTime < end;
-  });
-  return isOnDuty ? "On Duty" : "Off Duty";
-}
 
 export default function DashboardScreen() {
   const [appointments, setAppointments] = useState([]);
@@ -49,56 +15,106 @@ export default function DashboardScreen() {
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [, setStatusTick] = useState(0);
+  const [actioningId, setActioningId] = useState(null);
+  const [, setStatusVersion] = useState(0);
 
+  // Sync with doctor availability changes across components
   useEffect(() => {
     function onStatusChange() {
-      setStatusTick((t) => t + 1);
+      setStatusVersion((v) => v + 1);
     }
     window.addEventListener("clinica-doctor-status-change", onStatusChange);
     return () => window.removeEventListener("clinica-doctor-status-change", onStatusChange);
   }, []);
 
+  const loadData = async () => {
+    try {
+      setError(null);
+      const [apptsRes, patientsRes, docsRes] = await Promise.all([
+        getAppointments().catch(() => []),
+        getPatients().catch(() => []),
+        getDoctors().catch(() => []),
+      ]);
+
+      setAppointments(Array.isArray(apptsRes) ? apptsRes : []);
+      setPatients(Array.isArray(patientsRes) ? patientsRes : []);
+      setDoctors(Array.isArray(docsRes) ? docsRes : []);
+    } catch (err) {
+      setError(err.message || "Failed to load dashboard data");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    let isMounted = true;
+    loadData();
+  }, []);
 
-    async function loadData() {
+  const handleStatusChange = async (appointmentId, newStatus) => {
+    if (newStatus === "COMPLETED") {
+      setActioningId(appointmentId);
       try {
-        setLoading(true);
-        setError(null);
-        const [apptsRes, patientsRes, docsRes] = await Promise.all([
-          getAppointments().catch(() => []),
-          getPatients().catch(() => []),
-          getDoctors().catch(() => []),
-        ]);
-
-        if (!isMounted) return;
-
-        setAppointments(Array.isArray(apptsRes) ? apptsRes : []);
-        setPatients(Array.isArray(patientsRes) ? patientsRes : []);
-        setDoctors(Array.isArray(docsRes) ? docsRes : []);
+        await completeAppointment(appointmentId);
+        await loadData();
       } catch (err) {
-        if (isMounted) setError(err.message || "Failed to load dashboard data");
+        setError(err.message);
       } finally {
-        if (isMounted) setLoading(false);
+        setActioningId(null);
+      }
+    } else if (newStatus === "CANCEL") {
+      if (!window.confirm("Are you sure you want to cancel this appointment?")) return;
+      setActioningId(appointmentId);
+      try {
+        await cancelAppointment(appointmentId);
+        await loadData();
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setActioningId(null);
       }
     }
-
-    loadData();
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+  };
 
   const patientMap = new Map(patients.map((p) => [p.id, p]));
 
   // Today's metrics — filter by today's date only
-  const todayStr = new Date().toISOString().split("T")[0];
+  const now = new Date();
+  const todayStr = now.toISOString().split("T")[0];
+  const todayDayName = JAVA_DAY_NAMES[now.getDay()];
+  const formattedTodayDate = now.toLocaleDateString(undefined, {
+    weekday: "long",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+
   const todayAppointments = appointments.filter((a) => a.appointmentDate === todayStr);
   const totalVisits = todayAppointments.length;
-  const successfulAppts = todayAppointments.length; // All existing appointments are confirmed
-  // canceledAppts is always 0 because canceling an appointment deletes it from the DB
-  const canceledAppts = 0;
+  const completedOrPaid = todayAppointments.filter((a) => a.status === "COMPLETED" || a.status === "PAID").length;
+
+  // Filter doctors with shifts scheduled for today
+  const todayDoctorsList = [];
+  doctors.forEach((doc) => {
+    if (doc.schedules && doc.schedules.length > 0) {
+      doc.schedules.forEach((s, sIdx) => {
+        if (s.dayOfWeek === todayDayName) {
+          todayDoctorsList.push({
+            doctor: doc,
+            schedule: s,
+            scheduleIndex: sIdx,
+          });
+        }
+      });
+    }
+  });
+
+  // Sort by doctor name then start time
+  todayDoctorsList.sort((a, b) => {
+    if (a.doctor.name !== b.doctor.name) {
+      return a.doctor.name.localeCompare(b.doctor.name);
+    }
+    return (a.schedule.startTime || "").localeCompare(b.schedule.startTime || "");
+  });
 
   if (loading) {
     return (
@@ -114,19 +130,27 @@ export default function DashboardScreen() {
 
       {/* 1. Scheduled Appointments Table */}
       <section className="dash-card">
-        <h2 className="dash-card-title">Scheduled appointments</h2>
+        <div className="section-header-row">
+          <div>
+            <h2 className="dash-card-title">Appointments Overview</h2>
+            <p className="section-subtext" style={{ marginTop: "0.2rem" }}>
+              3 Stages: <strong style={{ color: "#1d4ed8" }}>Scheduled</strong> → <strong style={{ color: "#b45309" }}>Completed</strong> → <strong style={{ color: "#047857" }}>Paid</strong>
+            </p>
+          </div>
+        </div>
+
         {appointments.length === 0 ? (
-          <p className="empty-notice">No scheduled appointments found in the database. You can book an appointment under the Appointments tab.</p>
+          <p className="empty-notice">No appointments found in the database. You can book an appointment under the Appointments tab.</p>
         ) : (
           <div className="table-responsive">
             <table className="dash-table">
               <colgroup>
-                <col style={{ width: "20%" }} />
-                <col style={{ width: "10%" }} />
+                <col style={{ width: "22%" }} />
+                <col style={{ width: "8%" }} />
                 <col style={{ width: "25%" }} />
                 <col style={{ width: "20%" }} />
-                <col style={{ width: "15%" }} />
-                <col style={{ width: "10%" }} />
+                <col style={{ width: "13%" }} />
+                <col style={{ width: "12%" }} />
               </colgroup>
               <thead>
                 <tr>
@@ -134,23 +158,55 @@ export default function DashboardScreen() {
                   <th>Age</th>
                   <th>Ailment</th>
                   <th>Doctor</th>
-                  <th>Date & Time</th>
-                  <th className="th-status">STATUS</th>
+                  <th>Date &amp; Time</th>
+                  <th>Status</th>
                 </tr>
               </thead>
               <tbody>
                 {appointments.map((appt, idx) => {
                   const patient = patientMap.get(appt.patient?.id);
                   const startTime = appt.startTime ? appt.startTime.substring(0, 5) : "--:--";
+                  const status = appt.status || "SCHEDULED";
+                  const isScheduled = status === "SCHEDULED";
+                  const isCompleted = status === "COMPLETED";
 
                   return (
                     <tr key={appt.id || idx}>
                       <td className="cell-patient-name">{appt.patient?.name || "N/A"}</td>
                       <td>{patient?.age ?? "—"}</td>
-                      <td>{patient?.ailment || "General Consultation"}</td>
+                      <td>{appt.ailment || "General Consultation"}</td>
                       <td>{appt.doctor?.name || "N/A"}</td>
                       <td>{appt.appointmentDate} @ {startTime}</td>
-                      <td className="cell-status status-confirmed">Confirmed</td>
+                      <td>
+                        {isScheduled ? (
+                          <select
+                            className="status-dropdown-select status-scheduled"
+                            value="SCHEDULED"
+                            disabled={actioningId === appt.id}
+                            onChange={(e) => handleStatusChange(appt.id, e.target.value)}
+                            title="Change status or cancel appointment"
+                          >
+                            <option value="SCHEDULED">Scheduled</option>
+                            <option value="COMPLETED">Mark Completed</option>
+                            <option value="CANCEL">✕ Cancel</option>
+                          </select>
+                        ) : isCompleted ? (
+                          <select
+                            className="status-dropdown-select status-completed"
+                            value="COMPLETED"
+                            disabled={actioningId === appt.id}
+                            onChange={(e) => handleStatusChange(appt.id, e.target.value)}
+                            title="Completed — ready for payment in Payments tab"
+                          >
+                            <option value="COMPLETED">Completed</option>
+                            <option value="CANCEL">✕ Cancel</option>
+                          </select>
+                        ) : (
+                          <span className="status-paid" title="Payment settled">
+                            Paid
+                          </span>
+                        )}
+                      </td>
                     </tr>
                   );
                 })}
@@ -165,90 +221,91 @@ export default function DashboardScreen() {
         <h2 className="dash-section-title">Today's Metrics</h2>
         <div className="metrics-grid">
           <div className="metric-card">
-            <span className="metric-label">Patient Visits</span>
+            <span className="metric-label">Total Appointments Today</span>
             <div className="metric-value">{totalVisits}</div>
-            <span className="metric-desc">Current Visits for today's clinical appointment</span>
+            <span className="metric-desc">Scheduled for today ({todayStr})</span>
           </div>
           <div className="metric-card">
-            <span className="metric-label">Successful Appointments</span>
-            <div className="metric-value">{successfulAppts}</div>
-            <span className="metric-desc">Current Successful Appointments for today</span>
+            <span className="metric-label">Completed / Settled</span>
+            <div className="metric-value">{completedOrPaid}</div>
+            <span className="metric-desc">Consultations done or paid today</span>
           </div>
           <div className="metric-card">
-            <span className="metric-label">Canceled Appointments</span>
-            <div className="metric-value">{canceledAppts}</div>
-            <span className="metric-desc">Current Canceled Appointments for today</span>
+            <span className="metric-label">Total Registered Doctors</span>
+            <div className="metric-value">{doctors.length}</div>
+            <span className="metric-desc">Active Clinical Staff</span>
           </div>
         </div>
       </section>
 
-      {/* 3. Doctor Schedule Status */}
+      {/* 3. Daily Doctor Availability (Filtered for Today's Shifts) */}
       <section className="dash-card">
-        <h2 className="dash-card-title">Doctor Schedule Status</h2>
+        <div className="section-header-row">
+          <div>
+            <h2 className="dash-card-title">Daily Doctor Availability</h2>
+            <p className="section-subtext" style={{ marginTop: "0.2rem" }}>
+              Doctors scheduled for duty today (<strong>{formattedTodayDate}</strong>) &amp; real-time availability status
+            </p>
+          </div>
+        </div>
+
         {doctors.length === 0 ? (
-          <p className="empty-notice">No doctors registered yet. Register doctors under the Doctors tab.</p>
+          <p className="empty-notice">No doctors registered yet.</p>
+        ) : todayDoctorsList.length === 0 ? (
+          <p className="empty-notice">
+            No doctors are scheduled for duty today (<strong>{todayDayName.charAt(0) + todayDayName.slice(1).toLowerCase()}</strong>). Visit the <strong>Doctors Directory</strong> to view full weekly schedules.
+          </p>
         ) : (
           <div className="table-responsive">
             <table className="dash-table">
               <colgroup>
-                <col style={{ width: "24%" }} />
-                <col style={{ width: "18%" }} />
-                <col style={{ width: "38%" }} />
-                <col style={{ width: "20%" }} />
+                <col style={{ width: "35%" }} />
+                <col style={{ width: "35%" }} />
+                <col style={{ width: "30%" }} />
               </colgroup>
               <thead>
                 <tr>
-                  <th>Name</th>
-                  <th>Phone Number</th>
-                  <th>Weekly Schedules</th>
-                  <th className="th-status">Current Status</th>
+                  <th>Doctor Name</th>
+                  <th>Today's Shift Hours</th>
+                  <th>Availability Status</th>
                 </tr>
               </thead>
               <tbody>
-                {doctors.map((doc) => (
-                  <tr key={doc.id}>
-                    <td className="cell-doctor-name">{doc.name}</td>
-                    <td>{doc.contact || "—"}</td>
-                    <td>
-                      {doc.schedules && doc.schedules.length > 0 ? (
-                        <div className="schedules-vertical-list">
-                          {doc.schedules.map((s, idx) => (
-                            <div key={idx} className="schedule-pill">
-                              <strong>{s.dayOfWeek?.substring(0, 3)}:</strong> {s.startTime?.substring(0, 5)}–{s.endTime?.substring(0, 5)}
-                            </div>
+                {todayDoctorsList.map((item, idx) => {
+                  const { doctor, schedule, scheduleIndex } = item;
+                  const currentStatus = getDoctorScheduleStatus(doctor, schedule, scheduleIndex);
+                  const slug = statusToSlug(currentStatus);
+
+                  return (
+                    <tr key={`${doctor.id}-${schedule?.id || idx}`}>
+                      <td className="cell-doctor-name">
+                        <strong>{doctor.name}</strong>
+                      </td>
+                      <td>
+                        <span className="time-range-badge">
+                          🕒 {schedule.startTime?.substring(0, 5)} – {schedule.endTime?.substring(0, 5)}
+                        </span>
+                      </td>
+                      <td>
+                        <select
+                          className={`status-select status-select-${slug}`}
+                          value={currentStatus}
+                          onChange={(e) => {
+                            setDoctorScheduleStatus(doctor.id, schedule, scheduleIndex, e.target.value);
+                            setStatusVersion((v) => v + 1);
+                          }}
+                        >
+                          <option value="">Select Status</option>
+                          {STATUS_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
                           ))}
-                        </div>
-                      ) : (
-                        <span className="text-muted">No schedule set</span>
-                      )}
-                    </td>
-                    <td className="cell-status">
-                      {doc.schedules && doc.schedules.length > 0 ? (
-                        <div className="status-vertical-list" style={{ alignItems: "flex-end" }}>
-                          {doc.schedules.map((s, idx) => {
-                            const status = getDoctorScheduleStatus(doc, s, idx);
-                            const slug = statusToSlug(status);
-                            return (
-                              <div key={idx} className="status-badge-container">
-                                {status ? (
-                                  <span className={`status-badge status-badge-${slug}`}>
-                                    {status}
-                                  </span>
-                                ) : (
-                                  <span className="status-badge status-badge-unselected">
-                                    Not Set
-                                  </span>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <span className="text-muted">—</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                        </select>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

@@ -13,6 +13,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -34,7 +35,7 @@ public class AppointmentController {
 
     @GetMapping("/availability")
     public List<DoctorAvailability> getAvailability(
-            @RequestParam Long specializationId,
+            @RequestParam(required = false) Long specializationId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         return availabilityService.getAvailableDoctors(specializationId, date);
     }
@@ -47,6 +48,12 @@ public class AppointmentController {
     @GetMapping
     public List<AppointmentResponse> getAllAppointments() {
         return appointmentService.getAllAppointments();
+    }
+
+    /** Marks the appointment as COMPLETED, allowing payment to be recorded. */
+    @PatchMapping("/{id}/complete")
+    public ResponseEntity<AppointmentResponse> completeAppointment(@PathVariable Long id) {
+        return ResponseEntity.ok(appointmentService.completeAppointment(id));
     }
 
     @DeleteMapping("/{id}")
