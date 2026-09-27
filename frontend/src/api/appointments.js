@@ -1,8 +1,7 @@
 import { api } from "./client.js";
 
-export function getAvailability(date, specializationId) {
-  const query = specializationId ? `date=${date}&specializationId=${specializationId}` : `date=${date}`;
-  return api.get(`/appointments/availability?${query}`);
+export function getAvailability(date) {
+  return api.get(`/appointments/availability?date=${date}`);
 }
 
 export function bookAppointment(appointment) {

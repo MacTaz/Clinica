@@ -3,12 +3,6 @@
 Mirrors `schema.sql`. Keep field names identical here, in the entity
 classes, and in the API contract — this is what keeps both sides in sync.
 
-## specializations
-| Column | Type | Notes |
-|---|---|---|
-| id | BIGINT | PK, auto-increment |
-| name | VARCHAR(100) | required, unique |
-
 ## doctors
 | Column | Type | Notes |
 |---|---|---|
@@ -16,7 +10,6 @@ classes, and in the API contract — this is what keeps both sides in sync.
 | name | VARCHAR(100) | required |
 | age | INT | 0–150 |
 | contact | VARCHAR(30) | required |
-| specialization_id | BIGINT | FK -> specializations(id) |
 | salary | DECIMAL(10,2) | not negative |
 
 ## doctor_schedules
@@ -36,6 +29,7 @@ classes, and in the API contract — this is what keeps both sides in sync.
 | age | INT | 0–150 |
 | contact | VARCHAR(30) | required |
 | ailment | VARCHAR(255) | required |
+| insurance_provider | VARCHAR(100) | optional |
 
 ## patient_medical_history
 | Column | Type | Notes |
@@ -52,6 +46,9 @@ classes, and in the API contract — this is what keeps both sides in sync.
 | doctor_id | BIGINT | FK -> doctors(id) |
 | appointment_date | DATE | required |
 | start_time | TIME | 30-minute slots |
+| status | VARCHAR(20) | SCHEDULED, COMPLETED, PAID |
+| payment_method | VARCHAR(20) | optional (CASH, CARD, GCASH, INSURANCE) |
+| ailment | VARCHAR(255) | optional |
 
 Unique per doctor+date+start_time, and per patient+date+start_time.
 
@@ -61,17 +58,17 @@ Unique per doctor+date+start_time, and per patient+date+start_time.
 | id | BIGINT | PK |
 | appointment_id | BIGINT | FK -> appointments(id), unique |
 | amount | DECIMAL(10,2) | not negative (API requires greater than 0) |
-| method | VARCHAR(20) | CASH, CARD, GCASH |
+| method | VARCHAR(20) | CASH, CARD, GCASH, INSURANCE |
 | status | VARCHAR(10) | UNPAID, PAID |
 | paid_at | DATETIME | set when status = PAID, null while UNPAID |
 | received_by | VARCHAR(100) | CASH only: staff who received the cash |
 | card_last4 | CHAR(4) | CARD only: last 4 digits of the card, never the full number |
-| approval_code | VARCHAR(12) | CARD only: 1–12 letters/digits from the POS terminal receipt |
+| approval_code | VARCHAR(100) | CARD: 1–12 letters/digits POS terminal receipt; INSURANCE: LOA reference |
 | gcash_reference | CHAR(13) | GCASH only: 13-digit GCash reference number |
 | installment_months | TINYINT | CARD with amount >= 10,000.00 only: 3, 6 or 12; NULL = straight payment. The bank pays the clinic in full, so the row is still one full PAID payment |
 
 Named CHECK constraints (the database copy of the Java validation):
-- `chk_payments_method`: method is CASH, CARD or GCASH.
+- `chk_payments_method`: method is CASH, CARD, GCASH, or INSURANCE.
 - `chk_payments_status`: status is UNPAID or PAID.
 - `chk_payments_paid_at`: PAID rows have paid_at; UNPAID rows don't.
 - `chk_payments_method_details`: each method has exactly its own detail

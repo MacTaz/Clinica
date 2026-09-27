@@ -12,7 +12,6 @@ public record DoctorRequest(
         @NotBlank String name,
         @Min(0) int age,
         @NotBlank String contact,
-        @NotNull Long specializationId,
         @NotNull @DecimalMin(value = "0.00", message = "Salary cannot be negative") BigDecimal salary,
         @NotEmpty List<ScheduleBlock> schedules) {
 

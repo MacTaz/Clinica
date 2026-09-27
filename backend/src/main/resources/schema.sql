@@ -1,18 +1,11 @@
 -- Mirrors docs/DATA_MODEL.md. Keep both in sync.
 
-CREATE TABLE IF NOT EXISTS specializations (
-    id   BIGINT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(100) NOT NULL UNIQUE
-);
-
 CREATE TABLE IF NOT EXISTS doctors (
     id                 BIGINT AUTO_INCREMENT PRIMARY KEY,
     name               VARCHAR(100) NOT NULL,
     age                INT NOT NULL CHECK (age BETWEEN 0 AND 150),
     contact            VARCHAR(30) NOT NULL,
-    specialization_id  BIGINT NOT NULL,
-    salary             DECIMAL(10,2) NOT NULL CHECK (salary >= 0),
-    FOREIGN KEY (specialization_id) REFERENCES specializations(id)
+    salary             DECIMAL(10,2) NOT NULL CHECK (salary >= 0)
 );
 
 CREATE TABLE IF NOT EXISTS doctor_schedules (
@@ -49,6 +42,7 @@ CREATE TABLE IF NOT EXISTS appointments (
     start_time        TIME NOT NULL,
     status            VARCHAR(20) NOT NULL DEFAULT 'SCHEDULED',
     payment_method    VARCHAR(20) NULL,
+    ailment           VARCHAR(255) NULL,
     FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE,
     FOREIGN KEY (doctor_id) REFERENCES doctors(id),
     UNIQUE (doctor_id, appointment_date, start_time),
@@ -97,6 +91,30 @@ CREATE TABLE IF NOT EXISTS payments (
 -- ADD COLUMN / ADD CONSTRAINT IF NOT EXISTS, so each change checks
 -- information_schema first and runs only when missing. Safe on every startup.
 -- Keep each definition identical to the CREATE TABLE above.
+
+-- Safely drop specialization_id FK and column from doctors if present in existing databases
+SET @fk = (SELECT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'doctors' AND COLUMN_NAME = 'specialization_id' LIMIT 1);
+SET @drop_fk = IF(@fk IS NOT NULL, CONCAT('ALTER TABLE doctors DROP FOREIGN KEY ', @fk), 'SELECT 1');
+PREPARE stmt FROM @drop_fk;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @drop_col = IF((SELECT COUNT(*) FROM information_schema.COLUMNS
+                    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'doctors' AND COLUMN_NAME = 'specialization_id') > 0,
+                   'ALTER TABLE doctors DROP COLUMN specialization_id',
+                   'SELECT 1');
+PREPARE stmt FROM @drop_col;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @drop_table = IF((SELECT COUNT(*) FROM information_schema.TABLES
+                      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'specializations') > 0,
+                     'DROP TABLE specializations',
+                     'SELECT 1');
+PREPARE stmt FROM @drop_table;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
 SET @ddl = IF((SELECT COUNT(*) FROM information_schema.COLUMNS
                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'payments' AND COLUMN_NAME = 'received_by') = 0,

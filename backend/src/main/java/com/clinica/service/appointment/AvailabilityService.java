@@ -5,12 +5,12 @@ import com.clinica.model.doctor.Doctor;
 import com.clinica.model.doctor.DoctorSchedule;
 import com.clinica.repository.appointment.AppointmentRepository;
 import com.clinica.repository.doctor.DoctorRepository;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @Transactional(readOnly = true)
@@ -27,12 +27,10 @@ public class AvailabilityService {
         this.appointmentRepository = appointmentRepository;
     }
 
-    // Returns available doctors with free 30-min slots for the given specialization (or all doctors) and date.
-    // Per API_CONTRACT.md: GET /appointments/availability?date={yyyy-mm-dd}&specializationId={id}
-    public List<DoctorAvailability> getAvailableDoctors(Long specializationId, LocalDate date) {
-        List<Doctor> doctors = specializationId != null
-                ? doctorRepository.findBySpecializationId(specializationId)
-                : doctorRepository.findAll();
+    // Returns available doctors with free 30-min slots for the given date.
+    // GET /appointments/availability?date={yyyy-mm-dd}
+    public List<DoctorAvailability> getAvailableDoctors(LocalDate date) {
+        List<Doctor> doctors = doctorRepository.findAll();
         LocalTime now = LocalTime.now();
         boolean isToday = date.equals(LocalDate.now());
 

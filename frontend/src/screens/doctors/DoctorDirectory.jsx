@@ -74,8 +74,7 @@ export default function DoctorDirectory() {
   const [submitting, setSubmitting] = useState(false);
   const [, setStatusVersion] = useState(0);
 
-  // Edit Mode toggles for top-right edit buttons
-  const [isEditingDoctors, setIsEditingDoctors] = useState(false);
+  // Edit Mode toggle for Table 2 schedules
   const [isEditingSchedules, setIsEditingSchedules] = useState(false);
 
   useEffect(() => {
@@ -248,7 +247,6 @@ export default function DoctorDirectory() {
       name: formattedName,
       age: parseInt(formData.age, 10),
       contact: formData.contact,
-      specializationId: 1, // Default general clinical practice
       salary: 0,
       schedules: formData.schedules.map((s) => ({
         dayOfWeek: s.dayOfWeek,
@@ -278,9 +276,11 @@ export default function DoctorDirectory() {
     if (!window.confirm("Are you sure you want to delete this doctor?")) return;
     try {
       await deleteDoctor(id);
+      setShowModal(false);
       loadData();
     } catch (err) {
       setError(err.message);
+      setModalError(err.message);
     }
   }
 
@@ -342,32 +342,9 @@ export default function DoctorDirectory() {
         <div className="dash-card-header">
           <div className="dash-card-header-left">
             <h3 className="dash-card-title">Doctors List</h3>
-            <span className="section-subtext">Registered clinical practitioners and contact details</span>
-          </div>
-          <div className="dash-card-header-actions">
-            <button
-              type="button"
-              className={`edit-toggle-btn ${isEditingDoctors ? "active" : ""}`}
-              onClick={() => setIsEditingDoctors(!isEditingDoctors)}
-              title="Toggle edit mode to update doctor details or remove doctors"
-            >
-              {isEditingDoctors ? "✓ Done Editing" : "✎ Edit Doctors"}
-            </button>
+            <span className="section-subtext">Registered clinical practitioners — click any doctor's name to edit their profile or duty shifts</span>
           </div>
         </div>
-
-        {isEditingDoctors && (
-          <div className="edit-mode-banner">
-            <span><strong>Edit Mode Active:</strong> Click <em>Edit</em> on any doctor below to update their name, age, or contact information.</span>
-            <button
-              type="button"
-              className="secondary-btn-sm"
-              onClick={() => setIsEditingDoctors(false)}
-            >
-              Close Edit Mode
-            </button>
-          </div>
-        )}
 
         {doctors.length === 0 ? (
           <p className="empty-notice">No doctors registered yet. Click "+ Register Doctor" to add one.</p>
@@ -375,11 +352,10 @@ export default function DoctorDirectory() {
           <div className="table-responsive">
             <table className="dash-table">
               <colgroup>
-                <col style={{ width: "30%" }} />
-                <col style={{ width: "12%" }} />
-                <col style={{ width: "26%" }} />
-                <col style={{ width: isEditingDoctors ? "20%" : "32%" }} />
-                {isEditingDoctors && <col style={{ width: "12%" }} />}
+                <col style={{ width: "32%" }} />
+                <col style={{ width: "15%" }} />
+                <col style={{ width: "25%" }} />
+                <col style={{ width: "28%" }} />
               </colgroup>
               <thead>
                 <tr>
@@ -387,7 +363,6 @@ export default function DoctorDirectory() {
                   <th>Age</th>
                   <th>Contact Number</th>
                   <th>Duty Schedule Summary</th>
-                  {isEditingDoctors && <th className="th-actions">Actions</th>}
                 </tr>
               </thead>
               <tbody>
@@ -398,8 +373,24 @@ export default function DoctorDirectory() {
                     : "No active days";
 
                   return (
-                    <tr key={d.id}>
-                      <td className="cell-doctor-name">{d.name}</td>
+                    <tr
+                      key={d.id}
+                      className="clickable-row"
+                      onClick={() => handleOpenEditDoctorModal(d)}
+                      title={`Click to edit ${d.name}'s profile and duty schedule`}
+                    >
+                      <td className="cell-doctor-name">
+                        <button
+                          type="button"
+                          className="doctor-name-clickable"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenEditDoctorModal(d);
+                          }}
+                        >
+                          {d.name}
+                        </button>
+                      </td>
                       <td>{d.age} yrs old</td>
                       <td>{d.contact}</td>
                       <td>
@@ -412,26 +403,6 @@ export default function DoctorDirectory() {
                           <span className="text-muted">No schedule configured</span>
                         )}
                       </td>
-                      {isEditingDoctors && (
-                        <td className="cell-actions">
-                          <button
-                            type="button"
-                            className="secondary-btn-sm"
-                            onClick={() => handleOpenEditDoctorModal(d)}
-                            title="Edit Doctor Details"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            className="danger-btn-sm"
-                            onClick={() => handleDelete(d.id)}
-                            title="Delete Doctor"
-                          >
-                            Delete
-                          </button>
-                        </td>
-                      )}
                     </tr>
                   );
                 })}
@@ -758,18 +729,42 @@ export default function DoctorDirectory() {
                 </div>
               </div>
 
-              <div className="modal-actions" style={{ marginTop: "1.25rem", paddingTop: "1rem", borderTop: "1px solid var(--border-light)" }}>
-                <button type="button" className="secondary-btn" onClick={() => setShowModal(false)}>
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="primary-btn"
-                  disabled={submitting || scheduleConflictMessages.length > 0}
-                >
-                  {submitting ? "Saving…" : editingDoctor ? "Save Changes" : "Register Doctor"}
-                </button>
-              </div>
+              {editingDoctor ? (
+                <div className="modal-actions-between" style={{ marginTop: "1.25rem", paddingTop: "1rem", borderTop: "1px solid var(--border-light)" }}>
+                  <button
+                    type="button"
+                    className="danger-btn-sm"
+                    onClick={() => handleDelete(editingDoctor.id)}
+                  >
+                    🗑 Delete Doctor
+                  </button>
+                  <div style={{ display: "flex", gap: "0.75rem" }}>
+                    <button type="button" className="secondary-btn" onClick={() => setShowModal(false)}>
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="primary-btn"
+                      disabled={submitting || scheduleConflictMessages.length > 0}
+                    >
+                      {submitting ? "Saving…" : "Save Changes"}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="modal-actions" style={{ marginTop: "1.25rem", paddingTop: "1rem", borderTop: "1px solid var(--border-light)" }}>
+                  <button type="button" className="secondary-btn" onClick={() => setShowModal(false)}>
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="primary-btn"
+                    disabled={submitting || scheduleConflictMessages.length > 0}
+                  >
+                    {submitting ? "Saving…" : "Register Doctor"}
+                  </button>
+                </div>
+              )}
             </form>
           </div>
         </div>

@@ -821,7 +821,7 @@ body {
 
 .form-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 1rem;
 }
 
@@ -829,6 +829,8 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
+  min-width: 0;
+  width: 100%;
 }
 
 .form-group label {
@@ -839,6 +841,9 @@ body {
 
 .form-group input,
 .form-group select {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   padding: 0.65rem 0.85rem;
   border: 1px solid var(--border-color);
   border-radius: 6px;
@@ -859,14 +864,19 @@ body {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .schedule-form-row select {
   flex: 1.2;
+  min-width: 0;
 }
 
 .schedule-form-row input[type="time"] {
   flex: 1;
+  min-width: 0;
 }
 
 .modal-actions {
@@ -874,6 +884,44 @@ body {
   justify-content: flex-end;
   gap: 0.75rem;
   margin-top: 1rem;
+}
+
+.modal-actions-between {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.doctor-name-clickable {
+  color: var(--sidebar-bg);
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  text-decoration: none;
+  transition: all 0.15s ease;
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: inherit;
+}
+
+.doctor-name-clickable:hover {
+  color: #1a4244;
+  text-decoration: underline;
+}
+
+.clickable-row {
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+
+.clickable-row:hover {
+  background-color: #f1f7f7 !important;
 }
 
 .slots-grid {
@@ -965,28 +1013,29 @@ body {
 
 /* ── Horizontal two-panel modal ─────────────────────────────────────── */
 .modal-content-wide {
-  max-width: 860px;
-  width: 100%;
+  max-width: 900px;
+  width: 95vw;
 }
 
 .modal-two-col {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0 1.5rem;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: 1.75rem;
   align-items: start;
 }
 
 /* A subtle vertical divider between the two columns */
 .modal-two-col .modal-col:first-child {
-  padding-right: 1.5rem;
-  border-right: 1px solid var(--border-light);
+  padding-right: 1.75rem;
+  border-right: 1px solid var(--border-color);
 }
 
 .modal-col {
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
+  gap: 1rem;
   min-width: 0;
+  width: 100%;
 }
 
 /* Section separator label inside a form */
@@ -1020,15 +1069,19 @@ body {
 /* Three-column grid for patient form */
 .form-grid-3 {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.85rem;
+  width: 100%;
+  min-width: 0;
 }
 
 /* Two-column grid */
 .form-grid-2 {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 0.85rem;
+  width: 100%;
+  min-width: 0;
 }
 
 /* Full-width inside a grid */
@@ -1038,6 +1091,9 @@ body {
 
 /* Nicer textarea styling */
 .form-group textarea {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   padding: 0.65rem 0.85rem;
   border: 1px solid var(--border-color);
   border-radius: 6px;

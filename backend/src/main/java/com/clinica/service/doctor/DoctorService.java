@@ -2,16 +2,13 @@ package com.clinica.service.doctor;
 
 import com.clinica.dto.doctor.DoctorRequest;
 import com.clinica.dto.doctor.DoctorResponse;
-import com.clinica.dto.specialization.SpecializationDto;
 import com.clinica.exception.InvalidRecordDataException;
 import com.clinica.exception.ResourceInUseException;
 import com.clinica.exception.ResourceNotFoundException;
 import com.clinica.model.doctor.Doctor;
 import com.clinica.model.doctor.DoctorSchedule;
-import com.clinica.model.specialization.Specialization;
 import com.clinica.repository.appointment.AppointmentRepository;
 import com.clinica.repository.doctor.DoctorRepository;
-import com.clinica.repository.specialization.SpecializationRepository;
 import java.time.DayOfWeek;
 import java.time.LocalTime;
 import java.util.List;
@@ -20,9 +17,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Owns all doctor business logic: registration (including specialization
- * lookup and schedule mapping), listing, and deletion.  The controller layer
- * only routes HTTP — it never touches repositories or entities directly.
+ * Owns all doctor business logic: registration, listing, and deletion.
+ * The controller layer only routes HTTP — it never touches repositories or entities directly.
  */
 @Service
 @Transactional
@@ -30,31 +26,23 @@ public class DoctorService {
 
     private final DoctorRepository doctorRepository;
     private final AppointmentRepository appointmentRepository;
-    private final SpecializationRepository specializationRepository;
 
     public DoctorService(DoctorRepository doctorRepository,
-                         AppointmentRepository appointmentRepository,
-                         SpecializationRepository specializationRepository) {
+                         AppointmentRepository appointmentRepository) {
         this.doctorRepository = doctorRepository;
         this.appointmentRepository = appointmentRepository;
-        this.specializationRepository = specializationRepository;
     }
 
     /**
      * Maps the incoming DTO to a Doctor entity, persists it, and returns
-     * a response DTO.  All DTO-level constraints (@NotBlank, @NotEmpty, etc.)
+     * a response DTO. All DTO-level constraints (@NotBlank, @NotEmpty, etc.)
      * are already validated by @Valid in the controller before this runs.
      */
     public DoctorResponse registerDoctor(DoctorRequest request) {
-        Specialization spec = specializationRepository.findById(request.specializationId())
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Specialization not found with ID: " + request.specializationId()));
-
         Doctor doctor = new Doctor();
         doctor.setName(request.name());
         doctor.setAge(request.age());             // Person.setAge validates 0–150
         doctor.setContact(request.contact());
-        doctor.setSpecialization(spec);
         doctor.setSalary(request.salary());       // Doctor.setSalary validates >= 0
 
         List<DoctorSchedule> schedules = request.schedules().stream().map(s -> {
@@ -154,11 +142,6 @@ public class DoctorService {
 
     // Converts a saved Doctor entity to the response DTO sent to the frontend.
     private DoctorResponse toResponse(Doctor doctor) {
-        SpecializationDto specDto = new SpecializationDto(
-                doctor.getSpecialization().getId(),
-                doctor.getSpecialization().getName()
-        );
-
         List<DoctorResponse.ScheduleBlock> scheduleBlocks = doctor.getSchedule().stream()
                 .map(s -> new DoctorResponse.ScheduleBlock(
                         s.getId(),
@@ -173,7 +156,6 @@ public class DoctorService {
                 doctor.getName(),
                 doctor.getAge(),
                 doctor.getContact(),
-                specDto,
                 doctor.getSalary(),
                 scheduleBlocks
         );

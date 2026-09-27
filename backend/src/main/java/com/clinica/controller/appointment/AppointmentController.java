@@ -35,9 +35,8 @@ public class AppointmentController {
 
     @GetMapping("/availability")
     public List<DoctorAvailability> getAvailability(
-            @RequestParam(required = false) Long specializationId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-        return availabilityService.getAvailableDoctors(specializationId, date);
+        return availabilityService.getAvailableDoctors(date);
     }
 
     @PostMapping

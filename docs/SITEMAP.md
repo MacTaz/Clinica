@@ -23,38 +23,38 @@ Clinica Management System
 │   │   ├── Search bar for appointments (by patient, doctor, date, ailment)
 │   │   ├── List of scheduled appointments
 │   │   ├── Columns: ID, Patient, Ailment / Reason, Doctor, Date & Time, Payment, Status, Actions
-│   │   └── Action: Cancel Appointment
+│   │   └── Action: Cancel Appointment / Complete Appointment
 │   └── "+ Add Appointment" Modal Flow
 │       ├── 1. Search & Select Patient (live search filter by name or contact)
 │       ├── 2. Enter Ailment / Reason for Visit (captured for this appointment & added to patient history)
-│       ├── 3. Select Specialization & Date Picker
-│       ├── 4. Fetch Doctor Availability (live 30-minute free slots)
+│       ├── 3. Select Date Picker & View Doctor Duty Info
+│       ├── 4. Select Available Doctor & 30-minute free slot chip
 │       └── 5. Confirm & Book Slot (`POST /api/appointments`)
 │
 ├── Patients
 │   ├── Patients Directory View
 │   │   ├── Search bar for patients (by name, contact, ailment)
-│   │   ├── Directory table (Name, Age, Contact, Current / Last Ailment, Actions)
-│   │   └── Action: Delete Patient (`DELETE /api/patients/{id}`)
+│   │   ├── Directory table (Name, Age, Contact, Current / Last Ailment, Insurance, Actions)
+│   │   └── Action: Edit Patient, Delete Patient (`DELETE /api/patients/{id}`)
 │   └── "+ Register Patient" Modal Flow
-│       ├── Fields: Full Name, Age (0–150), Contact Number
+│       ├── Fields: Full Name, Age (0–150), Contact Number, Insurance Provider
 │       └── Submit action (`POST /api/patients`)
 │
 ├── Doctors
 │   ├── Doctors Directory View
-│   │   ├── Directory table (Name, Specialization, Age, Contact, Salary, Schedule Pills, Actions)
-│   │   └── Action: Delete Doctor (`DELETE /api/doctors/{id}`)
+│   │   ├── Doctors List (Name, Age, Contact, Duty Shifts Summary, Actions: Edit/Delete)
+│   │   └── Doctor Schedules & Availability Table (Name, Day of Week, Duty Hours, Availability Status, Actions: Adjust Schedule)
 │   └── "+ Register Doctor" Modal Flow
-│       ├── Fields: Full Name, Age, Contact, Specialization, Monthly Salary
-│       ├── Dynamic Weekly Schedule Builder: Add/Remove multiple schedule blocks (Day of Week `MONDAY`..`SUNDAY`, Start Time, End Time)
+│       ├── Left Column: Doctor Profile (First Name, Last Name, Age, Contact)
+│       ├── Right Column: Weekly Duty Schedule Builder (Day of Week, Start Time, End Time)
 │       └── Submit action (`POST /api/doctors`)
 │
 └── Payments
     ├── Record Payment Action
-    │   ├── Select Appointment (only appointments without a payment; "No unpaid appointments" when none)
-    │   ├── Amount & Payment Method (`CASH`, `CARD`, `GCASH`)
+    │   ├── Select Appointment (only completed appointments without payment)
+    │   ├── Amount & Payment Method (`CASH`, `CARD`, `GCASH`, `INSURANCE`)
     │   ├── Method fields: CASH → Received by; CARD → Card last 4 digits + Approval code;
-    │   │   GCASH → sample QR (demo only, not a real payment) + GCash reference number
+    │   │   GCASH → sample QR (demo only) + GCash reference number; INSURANCE → LOA Approval Code
     │   ├── Payment term (CARD with amount ≥ 10,000 only): Straight, 3, 6 or 12 months
     │   └── Submit action (`POST /api/appointments/{id}/payment`)
     └── Payments History (collapsible, collapsed by default, header shows the count)
@@ -68,9 +68,9 @@ Clinica Management System
 | Sitemap Item | Component Path | Main Backend APIs Used | Description |
 |---|---|---|---|
 | **Dashboard** | `src/screens/dashboard/DashboardScreen.jsx` | `GET /api/appointments`<br>`GET /api/patients`<br>`GET /api/doctors` | Live operational overview of scheduled visits, daily metrics, and doctor duty hours. |
-| **Appointments** | `src/screens/appointments/AppointmentList.jsx` | `GET /api/appointments`<br>`GET /api/appointments/availability`<br>`POST /api/appointments`<br>`DELETE /api/appointments/{id}` | Schedule manager with live slot availability checker and booking modal. |
-| **Patients** | `src/screens/patients/PatientDirectory.jsx` | `GET /api/patients`<br>`POST /api/patients`<br>`DELETE /api/patients/{id}` | Patient records directory with modal for new patient registrations. |
-| **Doctors** | `src/screens/doctors/DoctorDirectory.jsx` | `GET /api/doctors`<br>`GET /api/specializations`<br>`POST /api/doctors`<br>`DELETE /api/doctors/{id}` | Clinical staff directory with schedule viewer and doctor registration modal. |
+| **Appointments** | `src/screens/appointments/AppointmentList.jsx` | `GET /api/appointments`<br>`GET /api/appointments/availability`<br>`POST /api/appointments`<br>`PATCH /api/appointments/{id}/complete`<br>`DELETE /api/appointments/{id}` | Schedule manager with live slot availability checker and booking modal. |
+| **Patients** | `src/screens/patients/PatientDirectory.jsx` | `GET /api/patients`<br>`POST /api/patients`<br>`PUT /api/patients/{id}`<br>`DELETE /api/patients/{id}` | Patient records directory with modal for new patient registrations. |
+| **Doctors** | `src/screens/doctors/DoctorDirectory.jsx` | `GET /api/doctors`<br>`POST /api/doctors`<br>`PUT /api/doctors/{id}`<br>`DELETE /api/doctors/{id}` | Clinical staff directory with schedule viewer and doctor registration modal. |
 | **Payments** | `src/screens/payments/PaymentsScreen.jsx` | `GET /api/payments`<br>`GET /api/appointments`<br>`POST /api/appointments/{id}/payment` | Billing and receipt management. |
 
 ---

@@ -1,7 +1,7 @@
 # Clinica
 
 A lightweight clinic management system: patient/doctor records, appointment
-booking by specialization, and simple payment recording.
+booking, and payment recording.
 
 ## Project layout
 
@@ -25,7 +25,7 @@ docker compose -f ../docker-compose.yml up -d   # or run MySQL yourself
 ```
 
 Backend runs on **http://localhost:8080**. `schema.sql` creates all tables
-on startup; `data.sql` seeds the fixed list of specializations.
+on startup.
 
 ## Running the frontend
 
@@ -40,12 +40,12 @@ Frontend runs on **http://localhost:5173** (Vite default).
 
 ## Who owns what (by folder, not by name)
 
-- `backend/.../patient/`, `backend/.../doctor/`, `backend/.../specialization/`
+- `backend/.../patient/`, `backend/.../doctor/`
   — patient & doctor database system
 - `backend/.../appointment/` — appointment system
 - `backend/.../payment/` — payment system
 - `frontend/src/screens/patients/`, `frontend/src/screens/doctors/`
-  — patient/doctor screens + Figma-driven UI
+  — patient/doctor screens + UI
 - `frontend/src/screens/appointments/` — appointment booking flow
 - `frontend/src/screens/payments/` — payment recording screen
 
@@ -62,5 +62,5 @@ Shared frontend pieces (`src/api/client.js`, `src/components/`,
 3. Frontend: always call the backend through `src/api/*.js`, never with a
    raw `fetch()` inside a screen component. That keeps the base URL,
    error handling, and JSON shape in one place.
-4. Keep enum-like values (specialization names, payment methods, payment
+4. Keep enum-like values (payment methods, payment
    statuses) exactly as spelled in `DATA_MODEL.md` on both sides.

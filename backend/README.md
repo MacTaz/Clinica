@@ -19,17 +19,7 @@ com.clinica
 ```
 
 Sub-packages under `model`, `repository`, `service`, `controller` are split
-by domain (`patient`, `doctor`, `specialization`, `appointment`,
-`payment`) so different people can work in parallel without touching the
-same files.
-
-## Status of the stubs
-
-`SpecializationController` / `SpecializationService` /
-`SpecializationRepository` are fully wired up end-to-end — use them as the
-pattern to copy for the other domains. Everything else under
-`appointment/` and `payment/` compiles and returns realistic mock data so
-the frontend isn't blocked, but the real logic is still `// TODO`.
+by domain (`patient`, `doctor`, `appointment`, `payment`).
 
 ## Run
 

@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { getAppointments, cancelAppointment, completeAppointment, getAvailability, bookAppointment } from "../../api/appointments.js";
 import { getPatients } from "../../api/patients.js";
-import { getSpecializations } from "../../api/specializations.js";
 import { getDoctors } from "../../api/doctors.js";
 import LoadingSpinner from "../../components/LoadingSpinner.jsx";
 import ErrorBanner from "../../components/ErrorBanner.jsx";
@@ -43,7 +42,6 @@ function toDateStr(year, month, day) {
 export default function AppointmentList() {
   const [appointments, setAppointments] = useState(null);
   const [patients, setPatients] = useState([]);
-  const [specializations, setSpecializations] = useState([]);
   const [doctors, setDoctors] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [error, setError] = useState(null);
@@ -68,13 +66,11 @@ export default function AppointmentList() {
     Promise.all([
       getAppointments(),
       getPatients(),
-      getSpecializations().catch(() => []),
       getDoctors(),
     ])
-      .then(([appts, pats, specs, docs]) => {
+      .then(([appts, pats, docs]) => {
         setAppointments(appts);
         setPatients(pats);
-        setSpecializations(specs);
         setDoctors(docs);
         if (pats.length > 0 && !selectedPatientId) setSelectedPatientId(String(pats[0].id));
       })

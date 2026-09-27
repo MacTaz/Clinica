@@ -14,7 +14,7 @@ All request/response bodies are JSON. Dates are `YYYY-MM-DD`, times are
 
 | Method | Endpoint | Body | Success | Notes |
 |---|---|---|---|---|
-| POST | `/patients` | `{name, age, contact, [ailment]}` | 201 + Patient | ailment is optional on initial registration |
+| POST | `/patients` | `{name, age, contact, [ailment], [insuranceProvider]}` | 201 + Patient | ailment is optional on initial registration |
 | GET | `/patients` | — | 200 + Patient[] | |
 | POST | `/patients/{id}/history` | `{entry}` | 201 + Patient | appends an entry |
 | DELETE | `/patients/{id}` | — | 204 | cascades history + appointments |
@@ -22,30 +22,23 @@ All request/response bodies are JSON. Dates are `YYYY-MM-DD`, times are
 **Patient** shape:
 ```json
 { "id": 1, "name": "Jane Cruz", "age": 34, "contact": "0917...",
-  "ailment": "Recurring migraines",
+  "ailment": "Recurring migraines", "insuranceProvider": "Maxicare",
   "medicalHistory": ["First visit: migraines started 2 weeks ago"] }
 ```
-
-## Specializations
-
-| Method | Endpoint | Body | Success | Notes |
-|---|---|---|---|---|
-| GET | `/specializations` | — | 200 + Specialization[] | fixed list, seeded in `data.sql` |
-
-**Specialization** shape: `{ "id": 1, "name": "Dermatology" }`
 
 ## Doctors
 
 | Method | Endpoint | Body | Success | Notes |
 |---|---|---|---|---|
-| POST | `/doctors` | `{name, age, contact, specializationId, salary, schedules}` | 201 + Doctor | |
+| POST | `/doctors` | `{name, age, contact, salary, schedules}` | 201 + Doctor | |
 | GET | `/doctors` | — | 200 + Doctor[] | |
+| PUT | `/doctors/{id}` | `{name, age, contact, salary, schedules}` | 200 + Doctor | updates doctor details or schedules |
 | DELETE | `/doctors/{id}` | — | 204 | 409 if the doctor still has appointments |
 
 **Doctor** shape:
 ```json
 { "id": 1, "name": "Dr. Reyes", "age": 41, "contact": "0917...",
-  "specialization": { "id": 1, "name": "Dermatology" }, "salary": 45000.00,
+  "salary": 45000.00,
   "schedules": [ { "id": 1, "dayOfWeek": "MONDAY", "startTime": "09:00", "endTime": "12:00" } ] }
 ```
 
@@ -53,9 +46,10 @@ All request/response bodies are JSON. Dates are `YYYY-MM-DD`, times are
 
 | Method | Endpoint | Body | Success | Notes |
 |---|---|---|---|---|
-| GET | `/appointments/availability?specializationId={id}&date={yyyy-mm-dd}` | — | 200 + DoctorAvailability[] | |
-| POST | `/appointments` | `{patientId, doctorId, appointmentDate, startTime, [ailment]}` | 201 + Appointment | 400 invalid, 409 slot taken; sets ailment & history |
+| GET | `/appointments/availability?date={yyyy-mm-dd}` | — | 200 + DoctorAvailability[] | |
+| POST | `/appointments` | `{patientId, doctorId, appointmentDate, startTime, [ailment], [paymentMethod]}` | 201 + Appointment | 400 invalid, 409 slot taken |
 | GET | `/appointments` | — | 200 + Appointment[] | |
+| PATCH | `/appointments/{id}/complete` | — | 200 + Appointment | marks status as COMPLETED |
 | DELETE | `/appointments/{id}` | — | 204 | also deletes its payment, if any |
 
 **DoctorAvailability** shape (response of the availability endpoint):
@@ -67,7 +61,9 @@ All request/response bodies are JSON. Dates are `YYYY-MM-DD`, times are
 ```json
 { "id": 1, "patient": { "id": 1, "name": "Jane Cruz" },
   "doctor": { "id": 1, "name": "Dr. Reyes" },
-  "appointmentDate": "2026-10-02", "startTime": "09:00" }
+  "appointmentDate": "2026-10-02", "startTime": "09:00",
+  "ailment": "Recurring migraines", "paymentMethod": "CASH",
+  "status": "SCHEDULED" }
 ```
 
 ## Payments
@@ -85,7 +81,7 @@ All request/response bodies are JSON. Dates are `YYYY-MM-DD`, times are
   "installmentMonths": null }
 ```
 
-`method` is one of `CASH`, `CARD`, `GCASH`. `status` is one of `UNPAID`, `PAID`;
+`method` is one of `CASH`, `CARD`, `GCASH`, `INSURANCE`. `status` is one of `UNPAID`, `PAID`;
 recording a payment always sets `PAID` and `paidAt`.
 
 Method-specific fields. Each method requires its own fields; the fields of
@@ -97,6 +93,7 @@ strings count as omitted.
 | `CASH` | `receivedBy` | staff name, up to 100 characters |
 | `CARD` | `cardLast4`, `approvalCode` | `cardLast4`: exactly 4 digits (never the full card number); `approvalCode`: 1–12 letters or digits, from the POS terminal receipt |
 | `GCASH` | `gcashReference` | exactly 13 digits |
+| `INSURANCE` | `approvalCode` | LOA / Approval Reference Number |
 
 Card installments: `installmentMonths` is optional and may be `3`, `6` or
 `12`, only when `method` is `CARD` and `amount` is at least `10000.00`;
@@ -109,7 +106,7 @@ Recording a payment fails with:
 - **409** if the appointment already has a payment.
 - **400** if `amount` is missing, not greater than 0, or has more than 8
   integer digits or 2 decimal places; if `method` is missing or not one of
-  `CASH`, `CARD`, `GCASH` (case-sensitive); if a method-specific field is
+  `CASH`, `CARD`, `GCASH`, `INSURANCE` (case-sensitive); if a method-specific field is
   missing, badly formatted, or belongs to another method; if
   `installmentMonths` is not a whole 3, 6 or 12, or is set for a non-CARD
   payment or an amount under 10000.00; or if the body is malformed JSON.
