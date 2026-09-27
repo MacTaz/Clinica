@@ -721,8 +721,10 @@ body {
   max-width: 520px;
   max-height: 90vh;
   overflow-y: auto;
+  overflow-x: hidden;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
   padding: 1.75rem;
+  box-sizing: border-box;
 }
 
 .modal-content-lg {
@@ -961,6 +963,195 @@ body {
   max-width: 620px;
 }
 
+/* ── Horizontal two-panel modal ─────────────────────────────────────── */
+.modal-content-wide {
+  max-width: 860px;
+  width: 100%;
+}
+
+.modal-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 1.5rem;
+  align-items: start;
+}
+
+/* A subtle vertical divider between the two columns */
+.modal-two-col .modal-col:first-child {
+  padding-right: 1.5rem;
+  border-right: 1px solid var(--border-light);
+}
+
+.modal-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  min-width: 0;
+}
+
+/* Section separator label inside a form */
+.form-section-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--sidebar-bg);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 0.1rem;
+}
+
+.form-section-label::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border-color);
+}
+
+/* Full-width divider spanning both columns */
+.modal-two-col-divider {
+  grid-column: 1 / -1;
+  border: none;
+  border-top: 1px solid var(--border-light);
+  margin: 0.5rem 0;
+}
+
+/* Three-column grid for patient form */
+.form-grid-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.85rem;
+}
+
+/* Two-column grid */
+.form-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.85rem;
+}
+
+/* Full-width inside a grid */
+.form-grid-full {
+  grid-column: 1 / -1;
+}
+
+/* Nicer textarea styling */
+.form-group textarea {
+  padding: 0.65rem 0.85rem;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-family: var(--font-main);
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  background: #ffffff;
+  resize: vertical;
+}
+
+.form-group textarea:focus {
+  outline: none;
+  border-color: var(--sidebar-bg);
+  box-shadow: 0 0 0 2px rgba(45, 107, 110, 0.15);
+}
+
+/* Inline hint text under a field */
+.field-hint {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 0.15rem;
+}
+
+/* Schedule builder rows — horizontal pill style */
+.schedule-pill-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: #f8fafc;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 0.45rem 0.6rem;
+  transition: border-color 0.15s;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.schedule-pill-row.conflict {
+  background: #fef2f2;
+  border-color: #f87171;
+}
+
+.schedule-pill-row select,
+.schedule-pill-row input[type="time"] {
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  padding: 0.35rem 0.45rem;
+  font-size: 0.82rem;
+  font-family: var(--font-main);
+  color: var(--text-primary);
+  background: #ffffff;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.schedule-pill-row select:focus,
+.schedule-pill-row input[type="time"]:focus {
+  outline: none;
+  border-color: var(--sidebar-bg);
+}
+
+.schedule-pill-day {
+  flex: 1.2 1 0%;
+  min-width: 0;
+}
+
+.schedule-pill-time {
+  flex: 1 1 0%;
+  min-width: 0;
+}
+
+.schedule-pill-sep {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* Appointment modal: patient dropdown + card on left */
+.appt-patient-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* Doctor slots panel on right */
+.appt-slots-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+/* Date + day badge row */
+.date-day-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.day-of-week-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.3rem 0.65rem;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #1d4ed8;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 .secondary-btn-sm {
   background: #f1f5f9;
   border: 1px solid var(--border-color);
@@ -981,7 +1172,14 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 0.5rem;
   margin-bottom: 0.5rem;
+}
+
+.schedule-header-row .form-section-label {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
 }
 
 .schedules-builder-container {
@@ -1019,11 +1217,13 @@ body {
   border: 1px solid #fca5a5;
   color: #b91c1c;
   border-radius: 6px;
-  padding: 0.4rem 0.6rem;
-  font-size: 0.8rem;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.75rem;
   font-weight: bold;
   cursor: pointer;
   transition: background 0.15s ease;
+  flex-shrink: 0;
+  line-height: 1;
 }
 
 .remove-row-btn:hover {

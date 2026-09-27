@@ -598,151 +598,167 @@ export default function DoctorDirectory() {
       {/* ========================================================================= */}
       {showModal && (
         <div className="modal-backdrop">
-          <div className="modal-content modal-large">
+          <div className="modal-content modal-content-wide">
             <div className="modal-header">
-              <h3>
-                {modalMode === "REGISTER"
-                  ? "Register New Doctor"
-                  : modalMode === "EDIT_SCHEDULE"
-                  ? `Adjust ${editingDoctor?.name}'s Schedules`
-                  : `Edit ${editingDoctor?.name}'s Profile`}
-              </h3>
+              <div>
+                <h3>
+                  {modalMode === "REGISTER"
+                    ? "Register New Doctor"
+                    : modalMode === "EDIT_SCHEDULE"
+                    ? `Adjust ${editingDoctor?.name}'s Schedules`
+                    : `Edit ${editingDoctor?.name}'s Profile`}
+                </h3>
+                <span className="section-subtext">
+                  {modalMode === "REGISTER"
+                    ? "Fill in the doctor's profile on the left and set their weekly duty schedule on the right."
+                    : modalMode === "EDIT_SCHEDULE"
+                    ? "Update the doctor's weekly duty shifts and consultation hours."
+                    : "Update the doctor's profile information and schedule below."}
+                </span>
+              </div>
               <button className="modal-close-btn" onClick={() => setShowModal(false)}>✕</button>
             </div>
 
             {modalError && <ErrorBanner message={modalError} />}
 
-            <form onSubmit={handleSaveDoctor} className="form-layout">
-              {/* Profile fields (shown in Register and Edit Doctor mode) */}
-              <div className="form-row">
-                <div className="form-group">
-                  <label>First Name *</label>
-                  <input
-                    required
-                    type="text"
-                    placeholder="e.g. Jane"
-                    value={formData.firstName}
-                    onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Last Name *</label>
-                  <input
-                    required
-                    type="text"
-                    placeholder="e.g. Smith"
-                    value={formData.lastName}
-                    onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-                  />
-                </div>
-              </div>
+            <form onSubmit={handleSaveDoctor}>
+              <div className="modal-two-col">
 
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Age *</label>
-                  <input
-                    required
-                    type="number"
-                    min="20"
-                    max="120"
-                    placeholder="e.g. 42"
-                    value={formData.age}
-                    onChange={(e) => setFormData({ ...formData, age: e.target.value })}
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Contact Number *</label>
-                  <input
-                    required
-                    type="tel"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    placeholder="e.g. 09181234567"
-                    value={formData.contact}
-                    onKeyDown={(e) => {
-                      if (
-                        e.key.length === 1 &&
-                        !/[0-9]/.test(e.key) &&
-                        !(e.ctrlKey || e.metaKey)
-                      ) {
-                        e.preventDefault();
-                      }
-                    }}
-                    onChange={(e) => {
-                      const digits = e.target.value.replace(/\D/g, "");
-                      setFormData({ ...formData, contact: digits });
-                    }}
-                  />
-                </div>
-              </div>
+                {/* ── LEFT COLUMN: Doctor Profile ── */}
+                <div className="modal-col">
+                  <p className="form-section-label">Doctor Profile</p>
 
-              {/* Adjustable Weekly Schedules Section */}
-              <div className="form-group">
-                <div className="schedule-header-row">
-                  <label>Weekly Duty Schedules (Adjustable) *</label>
-                  <button
-                    type="button"
-                    className="secondary-btn-sm"
-                    onClick={handleAddScheduleRow}
-                  >
-                    + Add Day
-                  </button>
-                </div>
-
-                <div className="schedules-builder-container">
-                  {formData.schedules.map((row, idx) => {
-                    const isConflict = scheduleConflicts.has(idx);
-                    return (
-                      <div
-                        key={idx}
-                        className={`schedule-builder-row ${isConflict ? "schedule-builder-row-conflict" : ""}`}
-                      >
-                        <select
-                          value={row.dayOfWeek}
-                          onChange={(e) => handleScheduleChange(idx, "dayOfWeek", e.target.value)}
-                        >
-                          {DAYS_OF_WEEK.map((day) => (
-                            <option key={day} value={day}>
-                              {day}
-                            </option>
-                          ))}
-                        </select>
-                        <input
-                          type="time"
-                          required
-                          value={row.startTime}
-                          onChange={(e) => handleScheduleChange(idx, "startTime", e.target.value)}
-                        />
-                        <span className="schedule-to-label">to</span>
-                        <input
-                          type="time"
-                          required
-                          value={row.endTime}
-                          onChange={(e) => handleScheduleChange(idx, "endTime", e.target.value)}
-                        />
-                        {formData.schedules.length > 1 && (
-                          <button
-                            type="button"
-                            className="remove-row-btn"
-                            title="Remove this schedule block"
-                            onClick={() => handleRemoveScheduleRow(idx)}
-                          >
-                            ✕
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })}
-                  {scheduleConflictMessages.length > 0 && (
-                    <div className="schedule-conflict-warning">
-                      <span>⚠️</span>
-                      <span>{scheduleConflictMessages[0]}</span>
+                  <div className="form-grid-2">
+                    <div className="form-group">
+                      <label>First Name *</label>
+                      <input
+                        required
+                        type="text"
+                        placeholder="e.g. Jane"
+                        value={formData.firstName}
+                        onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                      />
                     </div>
-                  )}
+                    <div className="form-group">
+                      <label>Last Name *</label>
+                      <input
+                        required
+                        type="text"
+                        placeholder="e.g. Smith"
+                        value={formData.lastName}
+                        onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-grid-2">
+                    <div className="form-group">
+                      <label>Age *</label>
+                      <input
+                        required
+                        type="number"
+                        min="20"
+                        max="120"
+                        placeholder="e.g. 42"
+                        value={formData.age}
+                        onChange={(e) => setFormData({ ...formData, age: e.target.value })}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Contact Number *</label>
+                      <input
+                        required
+                        type="tel"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        placeholder="e.g. 09181234567"
+                        value={formData.contact}
+                        onKeyDown={(e) => {
+                          if (e.key.length === 1 && !/[0-9]/.test(e.key) && !(e.ctrlKey || e.metaKey)) {
+                            e.preventDefault();
+                          }
+                        }}
+                        onChange={(e) => {
+                          const digits = e.target.value.replace(/\D/g, "");
+                          setFormData({ ...formData, contact: digits });
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── RIGHT COLUMN: Weekly Schedules ── */}
+                <div className="modal-col">
+                  <div className="schedule-header-row">
+                    <p className="form-section-label" style={{ margin: 0 }}>Weekly Duty Schedule *</p>
+                    <button
+                      type="button"
+                      className="secondary-btn-sm"
+                      onClick={handleAddScheduleRow}
+                    >
+                      + Add Day
+                    </button>
+                  </div>
+
+                  <div className="schedules-builder-container">
+                    {formData.schedules.map((row, idx) => {
+                      const isConflict = scheduleConflicts.has(idx);
+                      return (
+                        <div
+                          key={idx}
+                          className={`schedule-pill-row ${isConflict ? "conflict" : ""}`}
+                        >
+                          <select
+                            className="schedule-pill-day"
+                            value={row.dayOfWeek}
+                            onChange={(e) => handleScheduleChange(idx, "dayOfWeek", e.target.value)}
+                          >
+                            {DAYS_OF_WEEK.map((day) => (
+                              <option key={day} value={day}>
+                                {day.charAt(0) + day.slice(1).toLowerCase()}
+                              </option>
+                            ))}
+                          </select>
+                          <input
+                            type="time"
+                            className="schedule-pill-time"
+                            required
+                            value={row.startTime}
+                            onChange={(e) => handleScheduleChange(idx, "startTime", e.target.value)}
+                          />
+                          <span className="schedule-pill-sep">→</span>
+                          <input
+                            type="time"
+                            className="schedule-pill-time"
+                            required
+                            value={row.endTime}
+                            onChange={(e) => handleScheduleChange(idx, "endTime", e.target.value)}
+                          />
+                          {formData.schedules.length > 1 && (
+                            <button
+                              type="button"
+                              className="remove-row-btn"
+                              title="Remove this schedule block"
+                              onClick={() => handleRemoveScheduleRow(idx)}
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                    {scheduleConflictMessages.length > 0 && (
+                      <div className="schedule-conflict-warning">
+                        <span>⚠️</span>
+                        <span>{scheduleConflictMessages[0]}</span>
+                      </div>
+                    )}
+                  </div>
+                  <span className="field-hint">Each row is one duty shift. Shifts on the same day cannot overlap.</span>
                 </div>
               </div>
 
-              <div className="modal-actions">
+              <div className="modal-actions" style={{ marginTop: "1.25rem", paddingTop: "1rem", borderTop: "1px solid var(--border-light)" }}>
                 <button type="button" className="secondary-btn" onClick={() => setShowModal(false)}>
                   Cancel
                 </button>
@@ -751,7 +767,7 @@ export default function DoctorDirectory() {
                   className="primary-btn"
                   disabled={submitting || scheduleConflictMessages.length > 0}
                 >
-                  {submitting ? "Saving..." : editingDoctor ? "Save Changes" : "Register Doctor"}
+                  {submitting ? "Saving…" : editingDoctor ? "Save Changes" : "Register Doctor"}
                 </button>
               </div>
             </form>

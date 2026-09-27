@@ -275,13 +275,18 @@ export default function PatientDirectory() {
       {/* Register Patient Modal */}
       {showModal && (
         <div className="modal-backdrop">
-          <div className="modal-content">
+          <div className="modal-content modal-content-wide">
             <div className="modal-header">
-              <h3>Register New Patient</h3>
+              <div>
+                <h3>Register New Patient</h3>
+                <span className="section-subtext">Fill in the patient's personal and medical details below.</span>
+              </div>
               <button className="modal-close-btn" onClick={handleCloseRegisterModal}>✕</button>
             </div>
             <form onSubmit={handleRegister} className="form-layout">
-              <div className="form-row">
+              {/* Row 1: Name fields */}
+              <p className="form-section-label">Personal Information</p>
+              <div className="form-grid-3">
                 <div className="form-group">
                   <label>First Name *</label>
                   <input
@@ -302,69 +307,73 @@ export default function PatientDirectory() {
                     onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
                   />
                 </div>
+                <div className="form-group">
+                  <label>Age *</label>
+                  <input
+                    required
+                    type="number"
+                    min="0"
+                    max="150"
+                    placeholder="e.g. 34"
+                    value={formData.age}
+                    onChange={(e) => setFormData({ ...formData, age: e.target.value })}
+                  />
+                </div>
               </div>
-              <div className="form-group">
-                <label>Age *</label>
-                <input
-                  required
-                  type="number"
-                  min="0"
-                  max="150"
-                  placeholder="e.g. 34"
-                  value={formData.age}
-                  onChange={(e) => setFormData({ ...formData, age: e.target.value })}
-                />
+
+              {/* Row 2: Contact + Insurance */}
+              <div className="form-grid-2">
+                <div className="form-group">
+                  <label>Contact Number *</label>
+                  <input
+                    required
+                    type="tel"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    placeholder="e.g. 09171234567"
+                    value={formData.contact}
+                    onKeyDown={(e) => {
+                      if (e.key.length === 1 && !/[0-9]/.test(e.key) && !(e.ctrlKey || e.metaKey)) {
+                        e.preventDefault();
+                      }
+                    }}
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/\D/g, "");
+                      setFormData({ ...formData, contact: digits });
+                    }}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Health Insurance Provider <span className="optional-label">(optional)</span></label>
+                  <input
+                    type="text"
+                    placeholder="e.g. PhilHealth, Maxicare, Intellicare"
+                    value={formData.insuranceProvider}
+                    onChange={(e) => setFormData({ ...formData, insuranceProvider: e.target.value })}
+                  />
+                  <span className="field-hint">Leave blank if uninsured / self-pay.</span>
+                </div>
               </div>
-              <div className="form-group">
-                <label>Contact Number *</label>
-                <input
-                  required
-                  type="tel"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  placeholder="e.g. 09171234567"
-                  value={formData.contact}
-                  onKeyDown={(e) => {
-                    if (
-                      e.key.length === 1 &&
-                      !/[0-9]/.test(e.key) &&
-                      !(e.ctrlKey || e.metaKey)
-                    ) {
-                      e.preventDefault();
-                    }
-                  }}
-                  onChange={(e) => {
-                    const digits = e.target.value.replace(/\D/g, "");
-                    setFormData({ ...formData, contact: digits });
-                  }}
-                />
-              </div>
-              <div className="form-group">
-                <label>Health Insurance Provider <span className="optional-label">(optional)</span></label>
-                <input
-                  type="text"
-                  placeholder="e.g. PhilHealth, Maxicare, Intellicare"
-                  value={formData.insuranceProvider}
-                  onChange={(e) => setFormData({ ...formData, insuranceProvider: e.target.value })}
-                />
-                <small className="section-subtext">For logging purposes only.</small>
-              </div>
+
+              {/* Row 3: Medical background — full width */}
+              <p className="form-section-label">Medical Notes</p>
               <div className="form-group">
                 <label>Medical Background / Notes <span className="optional-label">(optional)</span></label>
                 <textarea
-                  rows="2"
+                  rows="3"
                   placeholder="e.g. Asthma since childhood, allergic to penicillin, hypertension history"
                   value={formData.medicalBackground}
                   onChange={(e) => setFormData({ ...formData, medicalBackground: e.target.value })}
                 />
-                <small className="section-subtext">Pre-existing conditions or background notes description.</small>
+                <span className="field-hint">Pre-existing conditions, allergies, or background notes.</span>
               </div>
-              <div className="modal-actions">
+
+              <div className="modal-actions" style={{ paddingTop: "0.75rem", borderTop: "1px solid var(--border-light)" }}>
                 <button type="button" className="secondary-btn" onClick={handleCloseRegisterModal}>
                   Cancel
                 </button>
                 <button type="submit" className="primary-btn" disabled={submitting}>
-                  {submitting ? "Saving..." : "Save Patient"}
+                  {submitting ? "Saving…" : "Save Patient"}
                 </button>
               </div>
             </form>
@@ -393,7 +402,8 @@ export default function PatientDirectory() {
             {isEditingPatient ? (
               /* Editable Patient Details Form */
               <form onSubmit={handleSaveEdit} className="form-layout">
-                <div className="form-row">
+                <p className="form-section-label">Personal Information</p>
+                <div className="form-grid-3">
                   <div className="form-group">
                     <label>First Name *</label>
                     <input
@@ -414,8 +424,6 @@ export default function PatientDirectory() {
                       onChange={(e) => setEditFormData({ ...editFormData, lastName: e.target.value })}
                     />
                   </div>
-                </div>
-                <div className="form-row">
                   <div className="form-group">
                     <label>Age *</label>
                     <input
@@ -428,6 +436,8 @@ export default function PatientDirectory() {
                       onChange={(e) => setEditFormData({ ...editFormData, age: e.target.value })}
                     />
                   </div>
+                </div>
+                <div className="form-grid-2">
                   <div className="form-group">
                     <label>Contact Number *</label>
                     <input
@@ -438,11 +448,7 @@ export default function PatientDirectory() {
                       placeholder="e.g. 09171234567"
                       value={editFormData.contact}
                       onKeyDown={(e) => {
-                        if (
-                          e.key.length === 1 &&
-                          !/[0-9]/.test(e.key) &&
-                          !(e.ctrlKey || e.metaKey)
-                        ) {
+                        if (e.key.length === 1 && !/[0-9]/.test(e.key) && !(e.ctrlKey || e.metaKey)) {
                           e.preventDefault();
                         }
                       }}
@@ -452,17 +458,18 @@ export default function PatientDirectory() {
                       }}
                     />
                   </div>
+                  <div className="form-group">
+                    <label>Health Insurance Provider <span className="optional-label">(optional)</span></label>
+                    <input
+                      type="text"
+                      placeholder="e.g. PhilHealth, Maxicare, Intellicare"
+                      value={editFormData.insuranceProvider}
+                      onChange={(e) => setEditFormData({ ...editFormData, insuranceProvider: e.target.value })}
+                    />
+                    <span className="field-hint">Leave blank if uninsured / self-pay.</span>
+                  </div>
                 </div>
-                <div className="form-group">
-                  <label>Health Insurance Provider <span className="optional-label">(optional)</span></label>
-                  <input
-                    type="text"
-                    placeholder="e.g. PhilHealth, Maxicare, Intellicare"
-                    value={editFormData.insuranceProvider}
-                    onChange={(e) => setEditFormData({ ...editFormData, insuranceProvider: e.target.value })}
-                  />
-                  <small className="section-subtext">Leave blank if uninsured / self-pay.</small>
-                </div>
+                <p className="form-section-label">Medical Notes</p>
                 <div className="form-group">
                   <label>Medical Background / Notes <span className="optional-label">(optional)</span></label>
                   <textarea
@@ -471,10 +478,10 @@ export default function PatientDirectory() {
                     value={editFormData.medicalBackground}
                     onChange={(e) => setEditFormData({ ...editFormData, medicalBackground: e.target.value })}
                   />
-                  <small className="section-subtext">Pre-existing conditions, allergies, and patient notes.</small>
+                  <span className="field-hint">Pre-existing conditions, allergies, and patient notes.</span>
                 </div>
 
-                <div className="modal-actions" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div className="modal-actions" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "0.75rem", borderTop: "1px solid var(--border-light)" }}>
                   <button
                     type="button"
                     className="danger-btn-sm"
@@ -495,7 +502,7 @@ export default function PatientDirectory() {
                       Cancel
                     </button>
                     <button type="submit" className="primary-btn" disabled={updating}>
-                      {updating ? "Saving..." : "Save Changes"}
+                      {updating ? "Saving…" : "Save Changes"}
                     </button>
                   </div>
                 </div>

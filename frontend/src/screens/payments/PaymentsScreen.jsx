@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { QRCodeSVG } from "qrcode.react";
 import { getAppointments } from "../../api/appointments.js";
 import { getPayments, recordPayment } from "../../api/payments.js";
 import LoadingSpinner from "../../components/LoadingSpinner.jsx";
@@ -152,10 +151,6 @@ export default function PaymentsScreen() {
   }[method];
   const canSubmit = selectedAppointmentId !== "" && Number(amount) > 0 && methodFieldsFilled;
 
-  // Demo-only GCash QR: encodes a fake string, not a real payment request
-  const qrReady = selectedAppointmentId && Number(amount) > 0;
-  const qrValue = `CLINICA|appt=${selectedAppointmentId}|amount=${Number(amount).toFixed(2)}`;
-
   return (
     <section className="section-container">
       <div className="section-header-row">
@@ -304,31 +299,20 @@ export default function PaymentsScreen() {
           )}
 
           {method === "GCASH" && (
-            <>
-              <div className="form-group">
-                <label>Sample QR - demo only, not a real payment</label>
-                {qrReady ? (
-                  <QRCodeSVG value={qrValue} size={160} />
-                ) : (
-                  <p className="empty-notice">Select an appointment and enter an amount to show the sample QR.</p>
-                )}
-              </div>
-
-              <div className="form-group">
-                <label>GCash reference number *</label>
-                <input
-                  required
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="off"
-                  pattern="\d{13}"
-                  title="Exactly 13 digits"
-                  placeholder="13-digit reference from the GCash receipt"
-                  value={details.gcashReference}
-                  onChange={setDetail("gcashReference")}
-                />
-              </div>
-            </>
+            <div className="form-group">
+              <label>GCash reference number *</label>
+              <input
+                required
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
+                pattern="\d{13}"
+                title="Exactly 13 digits"
+                placeholder="13-digit reference from the GCash receipt"
+                value={details.gcashReference}
+                onChange={setDetail("gcashReference")}
+              />
+            </div>
           )}
 
           {method === "INSURANCE" && (

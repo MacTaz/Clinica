@@ -5,6 +5,7 @@ import { getSpecializations } from "../../api/specializations.js";
 import { getDoctors } from "../../api/doctors.js";
 import LoadingSpinner from "../../components/LoadingSpinner.jsx";
 import ErrorBanner from "../../components/ErrorBanner.jsx";
+import { getDoctorScheduleStatus } from "../../utils/doctorStatus.js";
 
 const DAYS_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -105,11 +106,30 @@ export default function AppointmentList() {
       setBookingError(null);
       getAvailability(selectedDate)
         .then((uniqueDocs) => {
-          setAvailableDoctors(uniqueDocs || []);
-          if (uniqueDocs && uniqueDocs.length > 0) {
+          // Filter out doctors whose schedule for the selected day is marked "Not Available"
+          // in localStorage (set from the Doctor Schedules & Availability table).
+          const selectedDayOfWeek = new Date(selectedDate + "T00:00:00").toLocaleString("en-US", { weekday: "long" }).toUpperCase();
+
+          const availableDoctorsList = (uniqueDocs || []).filter((docAvail) => {
+            // Find the full doctor record (which has schedule blocks with day/time info)
+            const fullDoctor = doctors.find((d) => String(d.id) === String(docAvail.doctorId));
+            if (!fullDoctor || !fullDoctor.schedules) return true; // no schedule data — let it through
+
+            // If ANY schedule block for the selected day is explicitly "Not Available", hide this doctor
+            for (let idx = 0; idx < fullDoctor.schedules.length; idx++) {
+              const sched = fullDoctor.schedules[idx];
+              if ((sched.dayOfWeek || "").toUpperCase() !== selectedDayOfWeek) continue;
+              const status = getDoctorScheduleStatus(fullDoctor, sched, idx);
+              if (status === "Not Available") return false;
+            }
+            return true;
+          });
+
+          setAvailableDoctors(availableDoctorsList);
+          if (availableDoctorsList.length > 0) {
             // Find existing selected doctor or pick the first available doctor
-            const currentDoc = uniqueDocs.find((d) => String(d.doctorId) === String(selectedDoctorId));
-            const activeDoc = currentDoc || uniqueDocs[0];
+            const currentDoc = availableDoctorsList.find((d) => String(d.doctorId) === String(selectedDoctorId));
+            const activeDoc = currentDoc || availableDoctorsList[0];
             setSelectedDoctorId(String(activeDoc.doctorId));
 
             if (activeDoc.freeSlots && activeDoc.freeSlots.length > 0) {
@@ -130,7 +150,7 @@ export default function AppointmentList() {
         })
         .finally(() => setLoadingSlots(false));
     }
-  }, [showModal, selectedDate]);
+  }, [showModal, selectedDate, doctors]);
 
   const handleOpenModal = () => {
     setBookingError(null);
@@ -379,186 +399,202 @@ export default function AppointmentList() {
       {/* Book Appointment Modal */}
       {showModal && (
         <div className="modal-backdrop">
-          <div className="modal-content modal-content-lg">
+          <div className="modal-content modal-content-wide">
             <div className="modal-header">
-              <h3>Book an Appointment</h3>
+              <div>
+                <h3>Book an Appointment</h3>
+                <span className="section-subtext">Fill in patient details on the left, then select a date and time slot on the right.</span>
+              </div>
               <button className="modal-close-btn" onClick={() => setShowModal(false)}>✕</button>
             </div>
 
             {bookingError && <ErrorBanner message={bookingError} />}
 
-            <form onSubmit={handleBookAppointment} className="form-layout">
-              {/* Patient Search and Selection */}
-              <div className="form-group">
-                <label>1. Search &amp; Select Registered Patient *</label>
-                {patients.length === 0 ? (
-                  <div className="warn-box">
-                    <p>No patients registered yet. Please register a patient in the <strong>Patients</strong> tab first.</p>
-                  </div>
-                ) : (
-                  <>
-                    <input
-                      type="text"
-                      className="search-input"
-                      placeholder="Type patient name or contact number to search..."
-                      value={patientSearch}
-                      onChange={(e) => setPatientSearch(e.target.value)}
-                    />
-                    <select
-                      className="patient-select-box"
-                      value={selectedPatientId}
-                      onChange={(e) => {
-                        const newId = e.target.value;
-                        setSelectedPatientId(newId);
-                        const pat = patients.find((p) => String(p.id) === String(newId));
-                        if (pat?.insuranceProvider) {
-                          setBookingPaymentMethod("INSURANCE");
-                        }
-                      }}
-                    >
-                      {filteredModalPatients.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name} (Age: {p.age}, Contact: {p.contact})
-                        </option>
-                      ))}
-                    </select>
+            <form onSubmit={handleBookAppointment}>
+              <div className="modal-two-col">
 
-                    {selectedPatientObj && (
-                      <div className="patient-selected-card">
-                        <span className="patient-selected-title">Selected Patient:</span>
-                        <strong>{selectedPatientObj.name}</strong> • Age: {selectedPatientObj.age} • Contact: {selectedPatientObj.contact}
-                        {selectedPatientObj.insuranceProvider && (
-                          <span className="insurance-tag"> 🛡 {selectedPatientObj.insuranceProvider}</span>
+                {/* ── LEFT COLUMN: Patient + Ailment + Payment ── */}
+                <div className="modal-col">
+                  <p className="form-section-label">Patient Info</p>
+
+                  {/* Patient Search */}
+                  <div className="form-group">
+                    <label>Search &amp; Select Patient *</label>
+                    {patients.length === 0 ? (
+                      <div className="warn-box">
+                        <p>No patients registered yet. Please register a patient in the <strong>Patients</strong> tab first.</p>
+                      </div>
+                    ) : (
+                      <>
+                        <input
+                          type="text"
+                          className="search-input"
+                          placeholder="Search by name or contact..."
+                          value={patientSearch}
+                          onChange={(e) => setPatientSearch(e.target.value)}
+                        />
+                        <select
+                          className="patient-select-box"
+                          value={selectedPatientId}
+                          onChange={(e) => {
+                            const newId = e.target.value;
+                            setSelectedPatientId(newId);
+                            const pat = patients.find((p) => String(p.id) === String(newId));
+                            if (pat?.insuranceProvider) setBookingPaymentMethod("INSURANCE");
+                          }}
+                        >
+                          {filteredModalPatients.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.name} — Age {p.age} · {p.contact}
+                            </option>
+                          ))}
+                        </select>
+                        {selectedPatientObj && (
+                          <div className="patient-selected-card">
+                            <span className="patient-selected-title">Selected:</span>
+                            <strong>{selectedPatientObj.name}</strong> &nbsp;·&nbsp; Age {selectedPatientObj.age} &nbsp;·&nbsp; {selectedPatientObj.contact}
+                            {selectedPatientObj.insuranceProvider && (
+                              <span className="insurance-tag"> 🛡 {selectedPatientObj.insuranceProvider}</span>
+                            )}
+                          </div>
                         )}
-                      </div>
+                      </>
                     )}
-                  </>
-                )}
-              </div>
-
-              {/* Ailment / Reason for Visit */}
-              <div className="form-group">
-                <label>2. Ailment / Reason for this Appointment *</label>
-                <input
-                  required
-                  type="text"
-                  placeholder="e.g. Skin rash, Persistent headache, Annual physical, Fever"
-                  value={bookingAilment}
-                  onChange={(e) => setBookingAilment(e.target.value)}
-                />
-              </div>
-
-              {/* Required Payment Method */}
-              <div className="form-group">
-                <label>3. Payment Method * <span className="stat-label">(Required setting before appointment continues)</span></label>
-                <select
-                  required
-                  value={bookingPaymentMethod}
-                  onChange={(e) => setBookingPaymentMethod(e.target.value)}
-                >
-                  {PAYMENT_METHODS.map((m) => (
-                    <option key={m} value={m}>
-                      {m === "INSURANCE"
-                        ? `INSURANCE (${selectedPatientObj?.insuranceProvider || "Health Insurance Claim"})`
-                        : m}
-                    </option>
-                  ))}
-                </select>
-                <small className="section-subtext">Required setting before the appointment proceeds; finalized or claimed when completed.</small>
-              </div>
-
-              <div className="form-group">
-                <label>4. Date ({selectedDayOfWeekName}) *</label>
-                <input
-                  type="date"
-                  min={new Date().toISOString().split("T")[0]}
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                />
-              </div>
-
-              {/* Doctor Duty Information Banner */}
-              {scheduledDoctors.length > 0 && (
-                <div className="schedule-info-box">
-                  <span className="schedule-info-title">Registered Doctor Duty Days:</span>
-                  {scheduledDoctors.map((doc) => (
-                    <div key={doc.id} className="schedule-info-item">
-                      <strong>{doc.name}:</strong>{" "}
-                      {doc.schedules?.length > 0
-                        ? doc.schedules.map((s) => `${s.dayOfWeek} (${s.startTime?.substring(0, 5)}-${s.endTime?.substring(0, 5)})`).join(", ")
-                        : "No duty schedule configured"}
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <div className="form-group">
-                <label>5. Available Doctors &amp; 30-Min Slots *</label>
-                {loadingSlots ? (
-                  <p className="loading-text">Checking available doctor schedules for {selectedDayOfWeekName}...</p>
-                ) : availableDoctors.length === 0 ? (
-                  <div className="warn-box">
-                    <p>No doctors on duty on <strong>{selectedDayOfWeekName} ({selectedDate})</strong>.</p>
-                    <small>Tip: Select a date that matches one of the doctor duty days listed above.</small>
                   </div>
-                ) : (
-                  <>
+
+                  {/* Ailment */}
+                  <div className="form-group">
+                    <label>Ailment / Reason for Visit *</label>
+                    <input
+                      required
+                      type="text"
+                      placeholder="e.g. Fever, Headache, Annual physical..."
+                      value={bookingAilment}
+                      onChange={(e) => setBookingAilment(e.target.value)}
+                    />
+                  </div>
+
+                  {/* Payment Method */}
+                  <div className="form-group">
+                    <label>Payment Method *</label>
                     <select
-                      value={selectedDoctorId}
-                      onChange={(e) => {
-                        const newDocId = e.target.value;
-                        setSelectedDoctorId(newDocId);
-                        const doc = availableDoctors.find((d) => String(d.doctorId) === newDocId);
-                        if (doc && doc.freeSlots?.length > 0) {
-                          const slot0 = doc.freeSlots[0];
-                          setSelectedSlot(typeof slot0 === "string" ? slot0.substring(0, 5) : String(slot0));
-                        } else {
-                          setSelectedSlot("");
-                        }
-                      }}
+                      required
+                      value={bookingPaymentMethod}
+                      onChange={(e) => setBookingPaymentMethod(e.target.value)}
                     >
-                      {availableDoctors.map((doc) => (
-                        <option key={doc.doctorId} value={doc.doctorId}>
-                          {doc.doctorName} ({doc.freeSlots?.length || 0} slots open)
+                      {PAYMENT_METHODS.map((m) => (
+                        <option key={m} value={m}>
+                          {m === "INSURANCE"
+                            ? `INSURANCE (${selectedPatientObj?.insuranceProvider || "Health Insurance Claim"})`
+                            : m}
                         </option>
                       ))}
                     </select>
+                    <span className="field-hint">Set before booking — finalized when the appointment is completed.</span>
+                  </div>
+                </div>
 
-                    {activeDoctorObj && activeDoctorObj.freeSlots?.length > 0 && (
-                      <div className="slots-wrapper">
-                        <label className="slots-sublabel">Select a 30-min slot:</label>
-                        <div className="slots-grid">
-                          {activeDoctorObj.freeSlots.map((slot) => {
-                            const slotStr = typeof slot === "string" ? slot.substring(0, 5) : String(slot);
-                            const isSelected = selectedSlot === slotStr;
-                            return (
-                              <button
-                                key={slotStr}
-                                type="button"
-                                className={`slot-chip ${isSelected ? "selected" : ""}`}
-                                onClick={() => setSelectedSlot(slotStr)}
-                              >
-                                {formatTimeTo12h(slotStr)}
-                              </button>
-                            );
-                          })}
+                {/* ── RIGHT COLUMN: Date + Doctor + Time Slots ── */}
+                <div className="modal-col">
+                  <p className="form-section-label">Schedule</p>
+
+                  {/* Date picker */}
+                  <div className="form-group">
+                    <label>Appointment Date *</label>
+                    <div className="date-day-row">
+                      <input
+                        type="date"
+                        style={{ flex: 1 }}
+                        min={new Date().toISOString().split("T")[0]}
+                        value={selectedDate}
+                        onChange={(e) => setSelectedDate(e.target.value)}
+                      />
+                      {selectedDayOfWeekName && (
+                        <span className="day-of-week-badge">{selectedDayOfWeekName}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Doctor Duty Info */}
+                  {scheduledDoctors.length > 0 && (
+                    <div className="schedule-info-box">
+                      <span className="schedule-info-title">Doctor Duty Days</span>
+                      {scheduledDoctors.map((doc) => (
+                        <div key={doc.id} className="schedule-info-item">
+                          <strong>{doc.name}:</strong>{" "}
+                          {doc.schedules?.length > 0
+                            ? doc.schedules.map((s) => `${s.dayOfWeek} (${s.startTime?.substring(0, 5)}–${s.endTime?.substring(0, 5)})`).join(", ")
+                            : "No schedule"}
                         </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Available Doctors */}
+                  <div className="form-group">
+                    <label>Available Doctor *</label>
+                    {loadingSlots ? (
+                      <p className="loading-text">Checking schedules for {selectedDayOfWeekName}…</p>
+                    ) : availableDoctors.length === 0 ? (
+                      <div className="warn-box">
+                        <p>No doctors on duty on <strong>{selectedDayOfWeekName}</strong>.</p>
+                        <small>Pick a date matching a doctor's duty day above.</small>
                       </div>
+                    ) : (
+                      <select
+                        value={selectedDoctorId}
+                        onChange={(e) => {
+                          const newDocId = e.target.value;
+                          setSelectedDoctorId(newDocId);
+                          const doc = availableDoctors.find((d) => String(d.doctorId) === newDocId);
+                          if (doc && doc.freeSlots?.length > 0) {
+                            const slot0 = doc.freeSlots[0];
+                            setSelectedSlot(typeof slot0 === "string" ? slot0.substring(0, 5) : String(slot0));
+                          } else {
+                            setSelectedSlot("");
+                          }
+                        }}
+                      >
+                        {availableDoctors.map((doc) => (
+                          <option key={doc.doctorId} value={doc.doctorId}>
+                            {doc.doctorName} — {doc.freeSlots?.length || 0} slot{doc.freeSlots?.length !== 1 ? "s" : ""} open
+                          </option>
+                        ))}
+                      </select>
                     )}
-                  </>
-                )}
+                  </div>
+
+                  {/* Time Slots */}
+                  {activeDoctorObj && activeDoctorObj.freeSlots?.length > 0 && (
+                    <div className="form-group">
+                      <label>Select a 30-min Time Slot *</label>
+                      <div className="slots-grid">
+                        {activeDoctorObj.freeSlots.map((slot) => {
+                          const slotStr = typeof slot === "string" ? slot.substring(0, 5) : String(slot);
+                          const isSelected = selectedSlot === slotStr;
+                          return (
+                            <button
+                              key={slotStr}
+                              type="button"
+                              className={`slot-chip ${isSelected ? "selected" : ""}`}
+                              onClick={() => setSelectedSlot(slotStr)}
+                            >
+                              {formatTimeTo12h(slotStr)}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
 
-              <div className="modal-actions">
+              <div className="modal-actions" style={{ marginTop: "1.25rem", paddingTop: "1rem", borderTop: "1px solid var(--border-light)" }}>
                 <button type="button" className="secondary-btn" onClick={() => setShowModal(false)}>
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  className="primary-btn"
-                  disabled={submitting}
-                >
-                  {submitting ? "Booking..." : "Confirm Appointment"}
+                <button type="submit" className="primary-btn" disabled={submitting}>
+                  {submitting ? "Booking…" : "Confirm Appointment"}
                 </button>
               </div>
             </form>
