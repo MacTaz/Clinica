@@ -620,6 +620,31 @@ body {
   background-color: #e2e8f0;
 }
 
+.danger-btn {
+  background-color: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fca5a5;
+  padding: 0.65rem 1.25rem;
+  border-radius: 8px;
+  font-family: var(--font-main);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  letter-spacing: 0;
+}
+
+.danger-btn:hover:not(:disabled) {
+  background-color: #fecaca;
+  color: #991b1b;
+  border-color: #f87171;
+}
+
+.danger-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .danger-btn-sm {
   background-color: #fee2e2;
   color: #b91c1c;
@@ -1830,12 +1855,12 @@ body {
   display: inline-flex;
   align-items: center;
   background: #f1f5f9;
-  color: #1e293b;
+  color: var(--text-primary);
   padding: 0.25rem 0.6rem;
   border-radius: 6px;
   font-family: var(--font-main);
-  font-size: 0.82rem;
-  font-weight: 600;
+  font-size: 0.88rem;
+  font-weight: 500;
   letter-spacing: 0;
 }
 

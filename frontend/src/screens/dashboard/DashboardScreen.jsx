@@ -418,7 +418,7 @@ export default function DashboardScreen() {
                       </td>
                       <td>
                         <span className="time-range-badge">
-                          🕒 {schedule.startTime?.substring(0, 5)} – {schedule.endTime?.substring(0, 5)}
+                          {schedule.startTime?.substring(0, 5)} – {schedule.endTime?.substring(0, 5)}
                         </span>
                       </td>
                       <td>

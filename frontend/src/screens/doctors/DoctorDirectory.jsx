@@ -697,10 +697,10 @@ export default function DoctorDirectory() {
                 <div className="modal-actions-between" style={{ marginTop: "1.25rem", paddingTop: "1rem", borderTop: "1px solid var(--border-light)" }}>
                   <button
                     type="button"
-                    className="danger-btn-sm"
+                    className="danger-btn"
                     onClick={() => handleDelete(editingDoctor.id)}
                   >
-                    🗑 Delete Doctor
+                    Delete Doctor
                   </button>
                   <div style={{ display: "flex", gap: "0.75rem" }}>
                     <button type="button" className="secondary-btn" onClick={() => setShowModal(false)}>

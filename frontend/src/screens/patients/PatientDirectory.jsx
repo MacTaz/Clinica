@@ -484,11 +484,11 @@ export default function PatientDirectory() {
                 <div className="modal-actions" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "0.75rem", borderTop: "1px solid var(--border-light)" }}>
                   <button
                     type="button"
-                    className="danger-btn-sm"
+                    className="danger-btn"
                     onClick={() => handleDelete(selectedPatientForHistory.id)}
                     title="Delete this patient record"
                   >
-                    🗑 Delete Patient
+                    Delete Patient
                   </button>
                   <div style={{ display: "flex", gap: "0.6rem" }}>
                     <button
@@ -583,11 +583,11 @@ export default function PatientDirectory() {
                 <div className="modal-actions" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <button
                     type="button"
-                    className="danger-btn-sm"
+                    className="danger-btn"
                     onClick={() => handleDelete(selectedPatientForHistory.id)}
                     title="Delete this patient record"
                   >
-                    🗑 Delete Patient
+                    Delete Patient
                   </button>
                   <div style={{ display: "flex", gap: "0.6rem" }}>
                     <button
@@ -596,7 +596,7 @@ export default function PatientDirectory() {
                       onClick={handleStartEdit}
                       title="Edit this patient's details"
                     >
-                      ✎ Edit Details
+                      Edit Details
                     </button>
                     <button type="button" className="primary-btn" onClick={handleClosePatientModal}>
                       Close
