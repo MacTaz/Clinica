@@ -38,7 +38,8 @@ export function getDoctorScheduleStatus(doctor, schedule, idx = 0) {
     console.error("Failed to read doctor status from storage", err);
   }
 
-  return "";
+  // No stored value — new schedules default to Available
+  return "Available";
 }
 
 /**
@@ -66,10 +67,10 @@ export function setDoctorScheduleStatus(doctorId, schedule, idx, status) {
  * Converts status string to CSS class slug.
  */
 export function statusToSlug(status) {
-  if (!status) return "unselected";
+  if (!status) return "available";
   const s = status.toLowerCase();
   if (s.includes("not") || s.includes("unavail") || s.includes("cancel")) return "unavailable";
   if (s.includes("late")) return "late";
   if (s.includes("avail") || s.includes("in")) return "available";
-  return "unselected";
+  return "available";
 }

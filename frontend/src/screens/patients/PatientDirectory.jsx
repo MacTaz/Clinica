@@ -21,7 +21,7 @@ function formatTimeTo12h(timeStr) {
 function formatDate(dateStr) {
   if (!dateStr) return "--";
   const [year, month, day] = dateStr.split("-");
-  return `${MONTH_NAMES[parseInt(month, 10) - 1].slice(0, 3)} ${parseInt(day, 10)}, ${year}`;
+  return `${month}/${day}/${year}`;
 }
 
 export default function PatientDirectory() {
@@ -253,7 +253,7 @@ export default function PatientDirectory() {
                       <td className="cell-patient-name">
                         <span className="patient-link-text">{p.name}</span>
                       </td>
-                      <td>{p.age} yrs</td>
+                      <td>{p.age}</td>
                       <td>{p.contact}</td>
                       <td>{bg ? bg : <span className="text-muted">—</span>}</td>
                       <td>
@@ -513,7 +513,7 @@ export default function PatientDirectory() {
                 <div className="patient-profile-summary">
                   <div className="patient-info-stat">
                     <span className="stat-label">Age</span>
-                    <span className="stat-value">{selectedPatientForHistory.age} yrs</span>
+                    <span className="stat-value">{selectedPatientForHistory.age}</span>
                   </div>
                   <div className="patient-info-stat">
                     <span className="stat-label">Contact</span>

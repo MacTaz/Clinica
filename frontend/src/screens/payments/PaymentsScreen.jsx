@@ -356,7 +356,7 @@ export default function PaymentsScreen() {
                   <th>Amount</th>
                   <th>Method</th>
                   <th>Details</th>
-                  <th>Status</th>
+                  <th style={{ width: "100px", minWidth: "100px" }}>Status</th>
                   <th>Paid At</th>
                 </tr>
               </thead>
@@ -367,7 +367,7 @@ export default function PaymentsScreen() {
                     <td>{formatAmount(p.amount)}</td>
                     <td>{p.method}</td>
                     <td>{formatDetails(p)}</td>
-                    <td>
+                    <td style={{ whiteSpace: "nowrap" }}>
                       <span className={`payment-badge ${p.status === "PAID" ? "paid" : "unpaid"}`}>
                         {p.status}
                       </span>

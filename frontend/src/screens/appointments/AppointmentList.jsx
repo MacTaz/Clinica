@@ -27,11 +27,11 @@ function formatTimeTo12h(timeStr) {
   return `${hours}:${minutes} ${ampm}`;
 }
 
-/** Format a date string "YYYY-MM-DD" to "MMM D, YYYY" */
+/** Format a date string "YYYY-MM-DD" to "MM/DD/YYYY" */
 function formatDate(dateStr) {
   if (!dateStr) return "--";
   const [year, month, day] = dateStr.split("-");
-  return `${MONTH_NAMES[parseInt(month, 10) - 1].slice(0, 3)} ${parseInt(day, 10)}, ${year}`;
+  return `${month}/${day}/${year}`;
 }
 
 /** Build a YYYY-MM-DD string from year/month/day (all numbers) */
@@ -325,7 +325,7 @@ export default function AppointmentList() {
                   <th>Date</th>
                   <th>Time</th>
                   <th>Payment</th>
-                  <th>Status</th>
+                  <th style={{ width: "160px", minWidth: "160px" }}>Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -350,7 +350,7 @@ export default function AppointmentList() {
                           <span className="text-muted">—</span>
                         )}
                       </td>
-                      <td>
+                      <td style={{ whiteSpace: "nowrap" }}>
                         {isScheduled ? (
                           <select
                             className="status-dropdown-select status-scheduled"

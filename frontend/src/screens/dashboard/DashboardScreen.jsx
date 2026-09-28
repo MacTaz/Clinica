@@ -27,7 +27,7 @@ function formatTimeTo12h(timeStr) {
 function formatDate(dateStr) {
   if (!dateStr) return "--";
   const [year, month, day] = dateStr.split("-");
-  return `${MONTH_NAMES[parseInt(month, 10) - 1].slice(0, 3)} ${parseInt(day, 10)}, ${year}`;
+  return `${month}/${day}/${year}`;
 }
 
 /** Build a YYYY-MM-DD string from year/month/day (all numbers) */

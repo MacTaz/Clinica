@@ -32,8 +32,11 @@ public class Doctor extends Person {
 
     public List<DoctorSchedule> getSchedule() { return schedule; }
     public void setSchedule(List<DoctorSchedule> schedule) {
-        this.schedule = schedule;
-        for (DoctorSchedule s : schedule) {
+        // Clear the Hibernate-tracked collection first so orphanRemoval deletes stale rows,
+        // then re-populate it in place — replacing the reference would break dirty-tracking.
+        this.schedule.clear();
+        this.schedule.addAll(schedule);
+        for (DoctorSchedule s : this.schedule) {
             s.setDoctor(this);
         }
     }

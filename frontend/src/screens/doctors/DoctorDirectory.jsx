@@ -391,7 +391,7 @@ export default function DoctorDirectory() {
                           {d.name}
                         </button>
                       </td>
-                      <td>{d.age} yrs old</td>
+                      <td>{d.age}</td>
                       <td>{d.contact}</td>
                       <td>
                         {scheduleCount > 0 ? (
@@ -440,29 +440,8 @@ export default function DoctorDirectory() {
                 ))}
               </select>
             </div>
-            <button
-              type="button"
-              className={`edit-toggle-btn ${isEditingSchedules ? "active" : ""}`}
-              onClick={() => setIsEditingSchedules(!isEditingSchedules)}
-              title="Toggle edit mode to adjust doctor schedules and duty shifts"
-            >
-              {isEditingSchedules ? "✓ Done Editing" : "✎ Edit Schedules"}
-            </button>
           </div>
         </div>
-
-        {isEditingSchedules && (
-          <div className="edit-mode-banner">
-            <span><strong>Edit Mode Active:</strong> Click <em>Adjust Schedule</em> on any doctor below to add/remove duty days or modify consultation hours.</span>
-            <button
-              type="button"
-              className="secondary-btn-sm"
-              onClick={() => setIsEditingSchedules(false)}
-            >
-              Close Edit Mode
-            </button>
-          </div>
-        )}
 
         {doctors.length === 0 ? (
           <p className="empty-notice">No doctor schedules found. Register a doctor to create schedules.</p>
@@ -483,8 +462,7 @@ export default function DoctorDirectory() {
                 <col style={{ width: "25%" }} />
                 <col style={{ width: "18%" }} />
                 <col style={{ width: "25%" }} />
-                <col style={{ width: isEditingSchedules ? "18%" : "32%" }} />
-                {isEditingSchedules && <col style={{ width: "14%" }} />}
+                <col style={{ width: "32%" }} />
               </colgroup>
               <thead>
                 <tr>
@@ -492,7 +470,6 @@ export default function DoctorDirectory() {
                   <th>Day of Week</th>
                   <th>Duty Hours</th>
                   <th>Availability Status</th>
-                  {isEditingSchedules && <th className="th-actions">Actions</th>}
                 </tr>
               </thead>
               <tbody>
@@ -516,7 +493,7 @@ export default function DoctorDirectory() {
                       <td>
                         {schedule ? (
                           <span className="time-range-badge">
-                            🕒 {schedule.startTime?.substring(0, 5)} – {schedule.endTime?.substring(0, 5)}
+                            {schedule.startTime?.substring(0, 5)} – {schedule.endTime?.substring(0, 5)}
                           </span>
                         ) : (
                           <span className="text-muted">No schedule set</span>
@@ -532,7 +509,6 @@ export default function DoctorDirectory() {
                               setStatusVersion((v) => v + 1);
                             }}
                           >
-                            <option value="">Select Status</option>
                             {STATUS_OPTIONS.map((opt) => (
                               <option key={opt.value} value={opt.value}>
                                 {opt.label}
@@ -543,18 +519,6 @@ export default function DoctorDirectory() {
                           <span className="text-muted">—</span>
                         )}
                       </td>
-                      {isEditingSchedules && (
-                        <td className="cell-actions">
-                          <button
-                            type="button"
-                            className="secondary-btn-sm"
-                            onClick={() => handleOpenEditScheduleModal(doctor)}
-                            title="Adjust weekly schedule for this doctor"
-                          >
-                            Adjust Schedule
-                          </button>
-                        </td>
-                      )}
                     </tr>
                   );
                 })}
