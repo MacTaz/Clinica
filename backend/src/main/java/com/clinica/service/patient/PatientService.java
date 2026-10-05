@@ -24,12 +24,35 @@ public class PatientService {
         if (request.name() == null || request.name().trim().isEmpty()) {
             throw new InvalidRecordDataException("Patient name is required.");
         }
+        if (request.contact() == null || request.contact().trim().isEmpty()) {
+            throw new InvalidRecordDataException("Contact number is required.");
+        }
+        if (request.age() < 0 || request.age() > 150) {
+            throw new InvalidRecordDataException("Age must be between 0 and 150.");
+        }
+
+        String cleanName = normalizeName(request.name());
+        String cleanContact = normalizeContact(request.contact());
+
+        // Check for duplicate patient (same name case-insensitive and contact number)
+        java.util.Optional<Patient> existing = patientRepository.findByNameIgnoreCaseAndContact(cleanName, cleanContact);
+        if (existing.isPresent()) {
+            Patient p = existing.get();
+            if (p.getAge() == request.age()) {
+                throw new InvalidRecordDataException(
+                        "A patient with name '" + cleanName + "', age " + request.age() + ", and contact '" + cleanContact + "' is already registered.");
+            }
+            throw new InvalidRecordDataException(
+                    "A patient with name '" + cleanName + "' and contact '" + cleanContact + "' is already registered.");
+        }
+
         Patient patient = new Patient();
-        patient.setName(request.name());
+        patient.setName(cleanName);
         patient.setAge(request.age()); // setAge validates 0–150 range
-        patient.setContact(request.contact());
+        patient.setContact(cleanContact);
         patient.setAilment(request.ailment() != null && !request.ailment().trim().isEmpty() ? request.ailment().trim() : "None");
-        patient.setInsuranceProvider(request.insuranceProvider());
+        patient.setInsuranceProvider(request.insuranceProvider() != null && !request.insuranceProvider().trim().isEmpty()
+                ? request.insuranceProvider().trim() : null);
         if (request.medicalBackground() != null && !request.medicalBackground().trim().isEmpty()) {
             patient.addHistoryEntry("Medical Background: " + request.medicalBackground().trim());
         }
@@ -59,14 +82,31 @@ public class PatientService {
         Patient patient = patientRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Patient not found"));
 
+        String targetName = (request.name() != null && !request.name().trim().isEmpty())
+                ? normalizeName(request.name())
+                : patient.getName();
+        String targetContact = (request.contact() != null && !request.contact().trim().isEmpty())
+                ? normalizeContact(request.contact())
+                : patient.getContact();
+
+        // Check if updating causes duplicate with another patient
+        java.util.Optional<Patient> existing = patientRepository.findByNameIgnoreCaseAndContact(targetName, targetContact);
+        if (existing.isPresent() && !existing.get().getId().equals(id)) {
+            throw new InvalidRecordDataException(
+                    "Another patient with name '" + targetName + "' and contact '" + targetContact + "' already exists.");
+        }
+
         if (request.name() != null && !request.name().trim().isEmpty()) {
-            patient.setName(request.name().trim());
+            patient.setName(targetName);
         }
         if (request.age() >= 0) {
+            if (request.age() > 150) {
+                throw new InvalidRecordDataException("Age must be between 0 and 150.");
+            }
             patient.setAge(request.age());
         }
         if (request.contact() != null && !request.contact().trim().isEmpty()) {
-            patient.setContact(request.contact().trim());
+            patient.setContact(targetContact);
         }
         if (request.ailment() != null) {
             patient.setAilment(request.ailment().trim().isEmpty() ? "None" : request.ailment().trim());
@@ -107,6 +147,16 @@ public class PatientService {
         patientRepository.deleteById(id); // Safe deletion of patient profile, including history and appointments
     }
 
+    private String normalizeName(String name) {
+        if (name == null) return null;
+        return name.trim().replaceAll("\\s+", " ");
+    }
+
+    private String normalizeContact(String contact) {
+        if (contact == null) return null;
+        return contact.trim();
+    }
+
     private PatientResponse toResponse(Patient patient) {
         return new PatientResponse(
                 patient.getId(),
@@ -117,19 +167,5 @@ public class PatientService {
                 patient.getInsuranceProvider(),
                 patient.getMedicalHistory()
         );
-    }
-
-    public Patient updatePatient(Long id, com.clinica.dto.patient.PatientUpdateRequest request) {
-        Patient patient = patientRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Patient not found"));
-
-        if (request.contact() != null && !request.contact().trim().isEmpty()) {
-            patient.setContact(request.contact());
-        }
-        if (request.ailment() != null && !request.ailment().trim().isEmpty()) {
-            patient.setAilment(request.ailment());
-        }
-
-        return patientRepository.save(patient);
     }
 }

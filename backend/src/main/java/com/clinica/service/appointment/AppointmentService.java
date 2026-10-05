@@ -51,6 +51,12 @@ public class AppointmentService {
         Doctor doctor = doctorRepository.findById(request.doctorId())
                 .orElseThrow(() -> new ResourceNotFoundException("Doctor not found"));
 
+        // Edge case: A doctor cannot be both attending doctor and patient in the same appointment
+        if (patient.getName().trim().equalsIgnoreCase(doctor.getName().trim())
+                && patient.getContact().trim().equalsIgnoreCase(doctor.getContact().trim())) {
+            throw new InvalidRecordDataException("A doctor cannot book an appointment with themselves.");
+        }
+
         // Validate the requested time falls within the doctor's schedule for that day
         boolean withinSchedule = doctor.getSchedule().stream().anyMatch(block ->
                 block.getDayOfWeek().equals(request.appointmentDate().getDayOfWeek())
