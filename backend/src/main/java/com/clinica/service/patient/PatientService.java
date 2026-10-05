@@ -118,4 +118,18 @@ public class PatientService {
                 patient.getMedicalHistory()
         );
     }
+
+    public Patient updatePatient(Long id, com.clinica.dto.patient.PatientUpdateRequest request) {
+        Patient patient = patientRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Patient not found"));
+
+        if (request.contact() != null && !request.contact().trim().isEmpty()) {
+            patient.setContact(request.contact());
+        }
+        if (request.ailment() != null && !request.ailment().trim().isEmpty()) {
+            patient.setAilment(request.ailment());
+        }
+
+        return patientRepository.save(patient);
+    }
 }

@@ -61,4 +61,23 @@ public class PatientController {
         patientService.deletePatient(id);
         return ResponseEntity.noContent().build();
     }
+
+    @org.springframework.web.bind.annotation.PutMapping("/{id}")
+    public org.springframework.http.ResponseEntity<com.clinica.dto.patient.PatientResponse> updatePatient(
+            @org.springframework.web.bind.annotation.PathVariable Long id,
+            @org.springframework.web.bind.annotation.RequestBody com.clinica.dto.patient.PatientUpdateRequest request) {
+
+        com.clinica.model.patient.Patient updatedPatient = patientService.updatePatient(id, request);
+
+        com.clinica.dto.patient.PatientResponse response = new com.clinica.dto.patient.PatientResponse(
+                updatedPatient.getId(),
+                updatedPatient.getName(),
+                updatedPatient.getAge(),
+                updatedPatient.getContact(),
+                updatedPatient.getAilment(),
+                updatedPatient.getMedicalHistory()
+        );
+
+        return org.springframework.http.ResponseEntity.ok(response);
+    }
 }
