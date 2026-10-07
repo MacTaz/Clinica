@@ -49,11 +49,17 @@ public class Payment {
     @Column(name = "approval_code", length = 100)
     private String approvalCode; // CARD: from the POS terminal receipt; INSURANCE: claim/LOA reference
 
-    @Column(name = "gcash_reference", length = 13)
-    private String gcashReference; // GCASH
+    @Column(name = "gcash_reference", length = 100)
+    private String gcashReference; // GCASH: manual 13-digit ref or gateway payment ID
 
     @Column(name = "installment_months")
     private Integer installmentMonths; // CARD >= 10,000.00 only: 3, 6 or 12; null = straight payment
+
+    @Column(name = "gateway_name", length = 30)
+    private String gatewayName; // null = manual in-clinic payment; 'PAYMONGO_SANDBOX' = online test gateway
+
+    @Column(name = "gateway_reference", length = 100)
+    private String gatewayReference; // PayMongo pay_xxx or cs_xxx payment reference ID
 
     public void markPaid(PaymentMethod method) {
         this.method = method;
@@ -79,4 +85,8 @@ public class Payment {
     public void setGcashReference(String gcashReference) { this.gcashReference = gcashReference; }
     public Integer getInstallmentMonths() { return installmentMonths; }
     public void setInstallmentMonths(Integer installmentMonths) { this.installmentMonths = installmentMonths; }
+    public String getGatewayName() { return gatewayName; }
+    public void setGatewayName(String gatewayName) { this.gatewayName = gatewayName; }
+    public String getGatewayReference() { return gatewayReference; }
+    public void setGatewayReference(String gatewayReference) { this.gatewayReference = gatewayReference; }
 }

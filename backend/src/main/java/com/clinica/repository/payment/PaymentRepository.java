@@ -8,4 +8,5 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface PaymentRepository extends JpaRepository<Payment, Long> {
     Optional<Payment> findByAppointmentId(Long appointmentId);
+    Optional<Payment> findByGatewayReference(String gatewayReference);
 }

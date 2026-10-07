@@ -61,22 +61,37 @@ CREATE TABLE IF NOT EXISTS payments (
     approval_code      VARCHAR(100) NULL,     -- CARD: approval code from POS terminal; INSURANCE: claim/LOA reference
     gcash_reference    CHAR(13) NULL,         -- GCASH: 13-digit GCash reference number
     installment_months TINYINT NULL,          -- CARD >= 10,000.00 only: 3, 6 or 12; NULL = straight payment
+    gateway_name       VARCHAR(30) NULL,      -- Online gateway identifier, e.g. 'PAYMONGO_SANDBOX'; NULL = manual
+    gateway_reference  VARCHAR(100) NULL,     -- PayMongo pay_xxx / cs_xxx reference ID
     FOREIGN KEY (appointment_id) REFERENCES appointments(id) ON DELETE CASCADE,
     CONSTRAINT chk_payments_method CHECK (method IN ('CASH', 'CARD', 'GCASH', 'INSURANCE')),
     CONSTRAINT chk_payments_status CHECK (status IN ('UNPAID', 'PAID')),
     CONSTRAINT chk_payments_paid_at CHECK ((status = 'PAID' AND paid_at IS NOT NULL) OR (status = 'UNPAID' AND paid_at IS NULL)),
     CONSTRAINT chk_payments_method_details CHECK (
-        (method = 'CASH'
+        -- Manual cash payment
+        (method = 'CASH' AND gateway_name IS NULL
             AND received_by IS NOT NULL AND TRIM(received_by) <> ''
             AND card_last4 IS NULL AND approval_code IS NULL AND gcash_reference IS NULL)
-     OR (method = 'CARD'
+     OR -- Manual card payment (POS terminal)
+        (method = 'CARD' AND gateway_name IS NULL
             AND card_last4 IS NOT NULL AND card_last4 REGEXP '^[0-9]{4}$'
             AND approval_code IS NOT NULL AND approval_code REGEXP '^[A-Za-z0-9]{1,12}$'
             AND received_by IS NULL AND gcash_reference IS NULL)
-     OR (method = 'GCASH'
+     OR -- Online card payment via gateway (approval_code holds gateway payment ID, longer format)
+        (method = 'CARD' AND gateway_name IS NOT NULL
+            AND card_last4 IS NOT NULL AND card_last4 REGEXP '^[0-9]{4}$'
+            AND approval_code IS NOT NULL
+            AND received_by IS NULL AND gcash_reference IS NULL)
+     OR -- Manual GCash payment (13-digit reference from GCash app)
+        (method = 'GCASH' AND gateway_name IS NULL
             AND gcash_reference IS NOT NULL AND gcash_reference REGEXP '^[0-9]{13}$'
             AND received_by IS NULL AND card_last4 IS NULL AND approval_code IS NULL)
-     OR (method = 'INSURANCE'
+     OR -- Online GCash payment via gateway (gcash_reference holds gateway payment ID)
+        (method = 'GCASH' AND gateway_name IS NOT NULL
+            AND gcash_reference IS NOT NULL
+            AND received_by IS NULL AND card_last4 IS NULL AND approval_code IS NULL)
+     OR -- Insurance payment
+        (method = 'INSURANCE'
             AND approval_code IS NOT NULL AND TRIM(approval_code) <> ''
             AND card_last4 IS NULL AND gcash_reference IS NULL)
     ),
@@ -265,9 +280,54 @@ PREPARE stmt FROM @ddl;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
+-- Old chk_payments_method_details replaced by gateway-aware version below (see PayMongo migration)
+SET @ddl = 'SELECT 1';
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- === PayMongo Gateway columns (safe on every startup) ===
+
+-- Add gateway_name column if missing
+SET @ddl = IF((SELECT COUNT(*) FROM information_schema.COLUMNS
+               WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'payments' AND COLUMN_NAME = 'gateway_name') = 0,
+              'ALTER TABLE payments ADD COLUMN gateway_name VARCHAR(30) NULL AFTER installment_months',
+              'SELECT 1');
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Add gateway_reference column if missing
+SET @ddl = IF((SELECT COUNT(*) FROM information_schema.COLUMNS
+               WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'payments' AND COLUMN_NAME = 'gateway_reference') = 0,
+              'ALTER TABLE payments ADD COLUMN gateway_reference VARCHAR(100) NULL AFTER gateway_name',
+              'SELECT 1');
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Drop old chk_payments_method_details (does not include gateway-aware branches)
+SET @ddl = IF((SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS
+               WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'payments' AND CONSTRAINT_NAME = 'chk_payments_method_details') > 0,
+              'ALTER TABLE payments DROP CONSTRAINT chk_payments_method_details',
+              'SELECT 1');
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Recreate chk_payments_method_details with gateway-aware branches
 SET @ddl = IF((SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS
                WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'payments' AND CONSTRAINT_NAME = 'chk_payments_method_details') = 0,
-              'ALTER TABLE payments ADD CONSTRAINT chk_payments_method_details CHECK ((method = ''CASH'' AND received_by IS NOT NULL AND TRIM(received_by) <> '''' AND card_last4 IS NULL AND approval_code IS NULL AND gcash_reference IS NULL) OR (method = ''CARD'' AND card_last4 IS NOT NULL AND card_last4 REGEXP ''^[0-9]{4}$'' AND approval_code IS NOT NULL AND approval_code REGEXP ''^[A-Za-z0-9]{1,12}$'' AND received_by IS NULL AND gcash_reference IS NULL) OR (method = ''GCASH'' AND gcash_reference IS NOT NULL AND gcash_reference REGEXP ''^[0-9]{13}$'' AND received_by IS NULL AND card_last4 IS NULL AND approval_code IS NULL) OR (method = ''INSURANCE'' AND approval_code IS NOT NULL AND TRIM(approval_code) <> '''' AND card_last4 IS NULL AND gcash_reference IS NULL))',
+              'ALTER TABLE payments ADD CONSTRAINT chk_payments_method_details CHECK ((method = ''CASH'' AND gateway_name IS NULL AND received_by IS NOT NULL AND TRIM(received_by) <> '''' AND card_last4 IS NULL AND approval_code IS NULL AND gcash_reference IS NULL) OR (method = ''CARD'' AND gateway_name IS NULL AND card_last4 IS NOT NULL AND card_last4 REGEXP ''^[0-9]{4}$'' AND approval_code IS NOT NULL AND approval_code REGEXP ''^[A-Za-z0-9]{1,12}$'' AND received_by IS NULL AND gcash_reference IS NULL) OR (method = ''CARD'' AND gateway_name IS NOT NULL AND card_last4 IS NOT NULL AND card_last4 REGEXP ''^[0-9]{4}$'' AND approval_code IS NOT NULL AND received_by IS NULL AND gcash_reference IS NULL) OR (method = ''GCASH'' AND gateway_name IS NULL AND gcash_reference IS NOT NULL AND gcash_reference REGEXP ''^[0-9]{13}$'' AND received_by IS NULL AND card_last4 IS NULL AND approval_code IS NULL) OR (method = ''GCASH'' AND gateway_name IS NOT NULL AND gcash_reference IS NOT NULL AND received_by IS NULL AND card_last4 IS NULL AND approval_code IS NULL) OR (method = ''INSURANCE'' AND approval_code IS NOT NULL AND TRIM(approval_code) <> '''' AND card_last4 IS NULL AND gcash_reference IS NULL))',
+              'SELECT 1');
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Widen gcash_reference from CHAR(13) to VARCHAR(100) to accommodate gateway payment IDs
+SET @ddl = IF((SELECT CHARACTER_MAXIMUM_LENGTH FROM information_schema.COLUMNS
+               WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'payments' AND COLUMN_NAME = 'gcash_reference') < 100,
+              'ALTER TABLE payments MODIFY COLUMN gcash_reference VARCHAR(100) NULL',
               'SELECT 1');
 PREPARE stmt FROM @ddl;
 EXECUTE stmt;

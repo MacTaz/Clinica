@@ -61,6 +61,56 @@ public class PaymentService {
         return toResponse(paymentRepository.save(payment));
     }
 
+    /**
+     * Records a payment that was completed through an online payment gateway
+     * (e.g. PayMongo). Called by PayMongoPaymentService after receiving a
+     * verified webhook event. Idempotent: silently returns existing record if
+     * gateway_reference is already stored (webhook retry safety).
+     *
+     * @param appointmentId    Clinica appointment ID from webhook metadata
+     * @param amount           Amount in PHP (already converted from centavos)
+     * @param method           GCASH or CARD (derived from payment source type)
+     * @param gatewayName      e.g. "PAYMONGO_SANDBOX"
+     * @param gatewayReference PayMongo payment ID (pay_xxx)
+     * @param cardLast4        Last 4 digits of card, or null if wallet
+     */
+    public PaymentResponse recordGatewayPayment(Long appointmentId, BigDecimal amount,
+            PaymentMethod method, String gatewayName, String gatewayReference, String cardLast4) {
+
+        // Idempotency: skip if we already stored this gateway payment reference
+        if (paymentRepository.findByGatewayReference(gatewayReference).isPresent()) {
+            return toResponse(paymentRepository.findByGatewayReference(gatewayReference).get());
+        }
+
+        Appointment appointment = appointmentRepository.findById(appointmentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Appointment not found for id: " + appointmentId));
+
+        if (paymentRepository.findByAppointmentId(appointmentId).isPresent()) {
+            throw new ResourceInUseException("Payment already recorded for appointment: " + appointmentId);
+        }
+
+        Payment payment = new Payment();
+        payment.setAppointment(appointment);
+        payment.setAmount(amount);
+        payment.setGatewayName(gatewayName);
+        payment.setGatewayReference(gatewayReference);
+
+        // Set method-specific fields to satisfy chk_payments_method_details gateway branch
+        if (method == PaymentMethod.CARD) {
+            payment.setCardLast4(cardLast4 != null ? cardLast4 : "0000");
+            payment.setApprovalCode(gatewayReference); // PayMongo pay_xxx as approval ref
+        } else {
+            // GCASH gateway branch: gcash_reference holds the PayMongo payment ID
+            payment.setGcashReference(gatewayReference);
+        }
+
+        payment.markPaid(method);
+        appointment.setStatus(AppointmentStatus.PAID);
+        appointmentRepository.save(appointment);
+
+        return toResponse(paymentRepository.save(payment));
+    }
+
     // Per API_CONTRACT.md: GET /payments → 200 + Payment[]
     @Transactional(readOnly = true)
     public List<PaymentResponse> getAllPayments() {
@@ -172,7 +222,9 @@ public class PaymentService {
                 payment.getCardLast4(),
                 payment.getApprovalCode(),
                 payment.getGcashReference(),
-                payment.getInstallmentMonths()
+                payment.getInstallmentMonths(),
+                payment.getGatewayName(),
+                payment.getGatewayReference()
         );
     }
 }

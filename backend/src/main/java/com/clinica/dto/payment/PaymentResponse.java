@@ -7,5 +7,6 @@ public record PaymentResponse(
         Long id, Long appointmentId, BigDecimal amount,
         String method, String status, LocalDateTime paidAt,
         String receivedBy, String cardLast4, String approvalCode, String gcashReference,
-        Integer installmentMonths) {
+        Integer installmentMonths,
+        String gatewayName, String gatewayReference) {
 }

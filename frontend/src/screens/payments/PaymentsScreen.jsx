@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { getAppointments } from "../../api/appointments.js";
-import { getPayments, recordPayment } from "../../api/payments.js";
+import { getPayments, recordPayment, createOnlineCheckout } from "../../api/payments.js";
 import LoadingSpinner from "../../components/LoadingSpinner.jsx";
 import ErrorBanner from "../../components/ErrorBanner.jsx";
 
@@ -17,6 +17,11 @@ const formatAmount = (amount) =>
   `₱${Number(amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const formatDetails = (p) => {
+  if (p.gatewayName) {
+    const gatewayLabel = p.gatewayName === "PAYMONGO_SANDBOX" ? "🧪 PayMongo Sandbox" : p.gatewayName;
+    const ref = p.gatewayReference ? ` · ${p.gatewayReference}` : "";
+    return `${gatewayLabel}${ref}`;
+  }
   if (p.method === "CASH" && p.receivedBy) return `Received by: ${p.receivedBy}`;
   if (p.method === "CARD" && p.cardLast4) {
     const term = p.installmentMonths ? `, ${p.installmentMonths}-month installment` : "";
@@ -40,6 +45,12 @@ export default function PaymentsScreen() {
   const [installmentMonths, setInstallmentMonths] = useState(""); // "" = Straight
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState(null);
+
+  // PayMongo sandbox state
+  const [onlineApptId, setOnlineApptId] = useState("");
+  const [onlineSubmitting, setOnlineSubmitting] = useState(false);
+  const [onlineError, setOnlineError] = useState(null);
+  const [onlineBannerMsg, setOnlineBannerMsg] = useState(null);
 
   const fetchAllData = () => {
     Promise.all([getAppointments(), getPayments()])
@@ -339,6 +350,127 @@ export default function PaymentsScreen() {
             </button>
           </div>
         </form>
+      </div>
+
+      {/* PayMongo Sandbox Online Payment */}
+      <div className="dash-card">
+        <h3 className="dash-card-title">
+          💳 Online Payment
+          <span style={{
+            marginLeft: "10px",
+            fontSize: "11px",
+            fontWeight: 600,
+            background: "#f59e0b",
+            color: "#1c1917",
+            padding: "2px 8px",
+            borderRadius: "999px",
+            verticalAlign: "middle",
+            letterSpacing: "0.05em"
+          }}>🧪 SANDBOX TEST MODE</span>
+        </h3>
+        <p className="section-subtext" style={{ marginBottom: "16px" }}>
+          Launch a PayMongo hosted checkout page for test card / GCash mock payments.
+          The payment will be automatically recorded once the customer completes checkout.
+        </p>
+
+        {onlineError && <ErrorBanner message={onlineError} />}
+
+        {onlineBannerMsg && (
+          <div style={{
+            background: "rgba(99,102,241,0.1)",
+            border: "1px solid rgba(99,102,241,0.3)",
+            borderRadius: "8px",
+            padding: "12px 16px",
+            marginBottom: "16px",
+            color: "var(--text-secondary, #94a3b8)",
+            fontSize: "14px",
+          }}>
+            <strong style={{ color: "var(--text-primary, #f1f5f9)" }}>⏳ Waiting for payment confirmation</strong>
+            <p style={{ margin: "4px 0 8px" }}>{onlineBannerMsg}</p>
+            <button
+              id="refresh-payments-btn"
+              className="primary-btn"
+              style={{ padding: "6px 14px", fontSize: "13px" }}
+              onClick={() => { fetchAllData(); setOnlineBannerMsg(null); }}
+            >
+              🔄 Refresh Payments List
+            </button>
+          </div>
+        )}
+
+        <div className="form-layout">
+          <div className="form-group">
+            <label>Appointment *</label>
+            <select
+              id="online-checkout-appointment-select"
+              value={onlineApptId}
+              onChange={(e) => { setOnlineApptId(e.target.value); setOnlineError(null); setOnlineBannerMsg(null); }}
+            >
+              {hasUnpaidAppointment ? (
+                <>
+                  <option value="">Select an appointment...</option>
+                  {unpaidAppointments.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      #{a.id} — {a.patient?.name} with {a.doctor?.name}, {a.appointmentDate}{" "}
+                      {a.startTime?.substring(0, 5)}
+                    </option>
+                  ))}
+                </>
+              ) : (
+                <option value="" disabled>No completed appointments awaiting payment</option>
+              )}
+            </select>
+          </div>
+
+          {onlineApptId && (() => {
+            const appt = appointments.find((a) => String(a.id) === String(onlineApptId));
+            return appt ? (
+              <div style={{
+                background: "rgba(15,23,42,0.6)",
+                border: "1px solid rgba(255,255,255,0.08)",
+                borderRadius: "8px",
+                padding: "12px 16px",
+                marginBottom: "4px",
+                fontSize: "14px",
+                color: "var(--text-secondary, #94a3b8)",
+              }}>
+                <div><strong style={{ color: "var(--text-primary, #f1f5f9)" }}>Patient:</strong> {appt.patient?.name}</div>
+                <div><strong style={{ color: "var(--text-primary, #f1f5f9)" }}>Doctor:</strong> {appt.doctor?.name}</div>
+                <div><strong style={{ color: "var(--text-primary, #f1f5f9)" }}>Date:</strong> {appt.appointmentDate} at {appt.startTime?.substring(0, 5)}</div>
+                <div style={{ marginTop: "8px", fontSize: "12px", opacity: 0.8 }}>
+                  Use test card <code>4242 4242 4242 4242</code> (any expiry/CVV) or GCash mock on the PayMongo sandbox page.
+                </div>
+              </div>
+            ) : null;
+          })()}
+
+          <div className="modal-actions">
+            <button
+              id="open-online-checkout-btn"
+              className="primary-btn"
+              disabled={!onlineApptId || onlineSubmitting}
+              onClick={async () => {
+                if (!onlineApptId) return;
+                setOnlineSubmitting(true);
+                setOnlineError(null);
+                setOnlineBannerMsg(null);
+                try {
+                  const { checkoutUrl } = await createOnlineCheckout(parseInt(onlineApptId, 10));
+                  window.open(checkoutUrl, "_blank", "noopener,noreferrer");
+                  setOnlineBannerMsg(
+                    "Complete the payment in the opened tab. Once done, click \"Refresh Payments List\" below to see the updated status."
+                  );
+                } catch (err) {
+                  setOnlineError(err.message || "Failed to create checkout session.");
+                } finally {
+                  setOnlineSubmitting(false);
+                }
+              }}
+            >
+              {onlineSubmitting ? "Creating checkout..." : "🔗 Open Test Checkout"}
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Payments History — collapsed by default */}
