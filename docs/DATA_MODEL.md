@@ -63,19 +63,20 @@ Unique per doctor+date+start_time, and per patient+date+start_time.
 | paid_at | DATETIME | set when status = PAID, null while UNPAID |
 | received_by | VARCHAR(100) | CASH only: staff who received the cash |
 | card_last4 | CHAR(4) | CARD only: last 4 digits of the card, never the full number |
-| approval_code | VARCHAR(100) | CARD: 1–12 letters/digits POS terminal receipt; INSURANCE: LOA reference |
-| gcash_reference | CHAR(13) | GCASH only: 13-digit GCash reference number |
+| approval_code | VARCHAR(100) | CARD: 1–12 letters/digits POS terminal receipt or gateway payment ID; INSURANCE: LOA reference |
+| gcash_reference | CHAR(13) | GCASH only: 13-digit GCash reference number (or gateway payment ID) |
 | installment_months | TINYINT | CARD with amount >= 10,000.00 only: 3, 6 or 12; NULL = straight payment. The bank pays the clinic in full, so the row is still one full PAID payment |
+| gateway_name | VARCHAR(30) | Online gateway identifier (e.g., 'PAYMONGO_SANDBOX'); NULL for manual payments |
+| gateway_reference | VARCHAR(100) | Online gateway reference identifier (e.g. PayMongo `pay_xxx` / `cs_xxx`) |
 
 Named CHECK constraints (the database copy of the Java validation):
 - `chk_payments_method`: method is CASH, CARD, GCASH, or INSURANCE.
 - `chk_payments_status`: status is UNPAID or PAID.
 - `chk_payments_paid_at`: PAID rows have paid_at; UNPAID rows don't.
-- `chk_payments_method_details`: each method has exactly its own detail
-  columns filled in, in the formats above; the others are null.
-- `chk_payments_installment`: installment_months is NULL, or 3/6/12 on a
-  CARD payment of at least 10,000.00.
+- `chk_payments_method_details`: each payment method and payment mode (manual vs gateway) has exactly its required detail columns filled in; the others are null.
+- `chk_payments_installment`: installment_months is NULL, or 3/6/12 on a CARD payment of at least 10,000.00.
 
 Databases created before these columns and constraints existed are
 upgraded in place by guarded `ALTER` statements at the end of `schema.sql`
 (each checks `information_schema` first, so startup stays idempotent).
+

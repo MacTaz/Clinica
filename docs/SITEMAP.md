@@ -50,15 +50,19 @@ Clinica Management System
 │       └── Submit action (`POST /api/doctors`)
 │
 └── Payments
-    ├── Record Payment Action
+    ├── Record Payment Action (Manual)
     │   ├── Select Appointment (only completed appointments without payment)
     │   ├── Amount & Payment Method (`CASH`, `CARD`, `GCASH`, `INSURANCE`)
     │   ├── Method fields: CASH → Received by; CARD → Card last 4 digits + Approval code;
     │   │   GCASH → sample QR (demo only) + GCash reference number; INSURANCE → LOA Approval Code
     │   ├── Payment term (CARD with amount ≥ 10,000 only): Straight, 3, 6 or 12 months
     │   └── Submit action (`POST /api/appointments/{id}/payment`)
+    ├── Online Payment (PayMongo Sandbox Checkout)
+    │   ├── Select Appointment
+    │   ├── Click "Open Test Checkout" (`POST /api/appointments/{id}/paymongo-checkout`)
+    │   └── Opens hosted checkout URL in new tab for sandbox card/e-wallet testing
     └── Payments History (collapsible, collapsed by default, header shows the count)
-        └── Columns: Appointment ID, Amount, Method, Details, Status, Paid At
+        └── Columns: Appointment ID, Amount, Method, Details (includes gateway status/reference), Status, Paid At
 ```
 
 ---
@@ -69,9 +73,10 @@ Clinica Management System
 |---|---|---|---|
 | **Dashboard** | `src/screens/dashboard/DashboardScreen.jsx` | `GET /api/appointments`<br>`GET /api/patients`<br>`GET /api/doctors` | Live operational overview of scheduled visits, daily metrics, and doctor duty hours. |
 | **Appointments** | `src/screens/appointments/AppointmentList.jsx` | `GET /api/appointments`<br>`GET /api/appointments/availability`<br>`POST /api/appointments`<br>`PATCH /api/appointments/{id}/complete`<br>`DELETE /api/appointments/{id}` | Schedule manager with live slot availability checker and booking modal. |
-| **Patients** | `src/screens/patients/PatientDirectory.jsx` | `GET /api/patients`<br>`POST /api/patients`<br>`PUT /api/patients/{id}`<br>`DELETE /api/patients/{id}` | Patient records directory with modal for new patient registrations. |
-| **Doctors** | `src/screens/doctors/DoctorDirectory.jsx` | `GET /api/doctors`<br>`POST /api/doctors`<br>`PUT /api/doctors/{id}`<br>`DELETE /api/doctors/{id}` | Clinical staff directory with schedule viewer and doctor registration modal. |
-| **Payments** | `src/screens/payments/PaymentsScreen.jsx` | `GET /api/payments`<br>`GET /api/appointments`<br>`POST /api/appointments/{id}/payment` | Billing and receipt management. |
+| **Patients** | `src/screens/patients/PatientDirectory.jsx` | `GET /api/patients`<br>`POST /api/patients`<br>`PUT /api/patients/{id}`<br>`DELETE /api/patients/{id}` | Patient records directory with modal for new patient registrations and editing existing patients. |
+| **Doctors** | `src/screens/doctors/DoctorDirectory.jsx` | `GET /api/doctors`<br>`POST /api/doctors`<br>`PUT /api/doctors/{id}`<br>`DELETE /api/doctors/{id}` | Clinical staff directory with schedule viewer and doctor registration / editing modal. |
+| **Payments** | `src/screens/payments/PaymentsScreen.jsx` | `GET /api/payments`<br>`GET /api/appointments`<br>`POST /api/appointments/{id}/payment`<br>`POST /api/appointments/{id}/paymongo-checkout` | Billing, payment recording, and PayMongo online checkout. |
+
 
 ---
 

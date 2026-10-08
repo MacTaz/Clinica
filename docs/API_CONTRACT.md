@@ -15,8 +15,10 @@ All request/response bodies are JSON. Dates are `YYYY-MM-DD`, times are
 | Method | Endpoint | Body | Success | Notes |
 |---|---|---|---|---|
 | POST | `/patients` | `{name, age, contact, [ailment], [insuranceProvider]}` | 201 + Patient | ailment is optional on initial registration |
-| GET | `/patients` | — | 200 + Patient[] | |
-| POST | `/patients/{id}/history` | `{entry}` | 201 + Patient | appends an entry |
+| GET | `/patients` | — | 200 + Patient[] | list all patients with medical history |
+| GET | `/patients/{id}` | — | 200 + Patient | retrieve single patient by id |
+| PUT | `/patients/{id}` | `{name, age, contact, [ailment], [insuranceProvider]}` | 200 + Patient | update patient details |
+| POST | `/patients/{id}/history` | `{entry}` | 201 + Patient | appends a medical history entry |
 | DELETE | `/patients/{id}` | — | 204 | cascades history + appointments |
 
 **Patient** shape:
@@ -70,15 +72,17 @@ All request/response bodies are JSON. Dates are `YYYY-MM-DD`, times are
 
 | Method | Endpoint | Body | Success | Notes |
 |---|---|---|---|---|
-| POST | `/appointments/{id}/payment` | `{amount, method, [receivedBy], [cardLast4], [approvalCode], [gcashReference], [installmentMonths]}` | 201 + Payment | one per appointment; 404 no such appointment, 409 already paid, 400 invalid amount/method/details |
-| GET | `/payments` | — | 200 + Payment[] | |
+| POST | `/appointments/{id}/payment` | `{amount, method, [receivedBy], [cardLast4], [approvalCode], [gcashReference], [installmentMonths]}` | 201 + Payment | manual payment recording; 404 no such appointment, 409 already paid, 400 invalid |
+| GET | `/payments` | — | 200 + Payment[] | list all payments |
+| POST | `/appointments/{id}/paymongo-checkout` | — | 200 + `{checkoutUrl}` | creates hosted PayMongo Checkout Session |
+| POST | `/webhooks/paymongo` | PayMongo Event JSON | 200 | receives PayMongo webhook event (async/idempotent) |
 
 **Payment** shape:
 ```json
 { "id": 1, "appointmentId": 1, "amount": 800.00, "method": "CASH",
   "status": "PAID", "paidAt": "2026-10-02T10:15:00",
   "receivedBy": "Ana", "cardLast4": null, "approvalCode": null, "gcashReference": null,
-  "installmentMonths": null }
+  "installmentMonths": null, "gatewayName": null, "gatewayReference": null }
 ```
 
 `method` is one of `CASH`, `CARD`, `GCASH`, `INSURANCE`. `status` is one of `UNPAID`, `PAID`;
@@ -91,8 +95,8 @@ strings count as omitted.
 | method | Required fields | Format |
 |---|---|---|
 | `CASH` | `receivedBy` | staff name, up to 100 characters |
-| `CARD` | `cardLast4`, `approvalCode` | `cardLast4`: exactly 4 digits (never the full card number); `approvalCode`: 1–12 letters or digits, from the POS terminal receipt |
-| `GCASH` | `gcashReference` | exactly 13 digits |
+| `CARD` | `cardLast4`, `approvalCode` | `cardLast4`: exactly 4 digits (never the full card number); `approvalCode`: 1–12 letters or digits from POS receipt (or gateway payment ID) |
+| `GCASH` | `gcashReference` | exactly 13 digits (or gateway payment ID for online checkout) |
 | `INSURANCE` | `approvalCode` | LOA / Approval Reference Number |
 
 Card installments: `installmentMonths` is optional and may be `3`, `6` or
@@ -100,6 +104,10 @@ Card installments: `installmentMonths` is optional and may be `3`, `6` or
 omit it or send `null` for a straight payment. The bank pays the clinic in
 full, so an installment payment is still one `PAID` payment for the full
 amount; only the term is recorded.
+
+Online Payments (PayMongo):
+- `POST /appointments/{id}/paymongo-checkout` initializes a checkout session and returns a hosted URL (`checkoutUrl`).
+- When paid, the PayMongo webhook (`POST /api/webhooks/paymongo`) records the payment with `gatewayName: "PAYMONGO_SANDBOX"`, `gatewayReference`, and automatically marks the appointment and payment as `PAID`.
 
 Recording a payment fails with:
 - **404** if the appointment doesn't exist.

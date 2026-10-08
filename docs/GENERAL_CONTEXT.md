@@ -80,9 +80,10 @@ ClinicSystem/
    - Constraints: Unique per `(doctor_id, appointment_date, start_time)` and `(patient_id, appointment_date, start_time)`.
 
 4. **Payments** (`payments` table):
-   - Fields: `id`, `appointment_id` (FK, unique), `amount`, `method` (`CASH`, `CARD`, `GCASH`, `INSURANCE`), `status` (`UNPAID`, `PAID`), `paid_at`.
+   - Fields: `id`, `appointment_id` (FK, unique), `amount`, `method` (`CASH`, `CARD`, `GCASH`, `INSURANCE`), `status` (`UNPAID`, `PAID`), `paid_at`, `gateway_name`, `gateway_reference`.
    - Method details: `received_by` (CASH), `card_last4` + `approval_code` (CARD; never the full card number), `gcash_reference` (GCASH), `approval_code` (INSURANCE LOA reference).
    - `installment_months` (3, 6, 12): card installments for CARD payments of at least 10,000.00. The bank pays the clinic in full, so it is still one PAID payment per appointment.
+   - PayMongo Sandbox Integration: Staff can trigger hosted checkout sessions via `POST /api/appointments/{id}/paymongo-checkout` and payments are automatically verified and recorded via `POST /api/webhooks/paymongo`.
 
 ---
 
@@ -92,6 +93,8 @@ ClinicSystem/
 |---|---|---|---|
 | **Patients** | `POST` | `/api/patients` | Register a new patient |
 | | `GET` | `/api/patients` | Retrieve all patients with medical history |
+| | `GET` | `/api/patients/{id}` | Retrieve a single patient by ID |
+| | `PUT` | `/api/patients/{id}` | Update patient profile details |
 | | `POST` | `/api/patients/{id}/history` | Append a medical history entry |
 | | `DELETE` | `/api/patients/{id}` | Delete patient (cascades history & appointments) |
 | **Doctors** | `POST` | `/api/doctors` | Register a doctor with weekly schedules |
@@ -103,28 +106,34 @@ ClinicSystem/
 | | `GET` | `/api/appointments` | List all booked appointments |
 | | `PATCH` | `/api/appointments/{id}/complete` | Mark appointment as COMPLETED |
 | | `DELETE` | `/api/appointments/{id}` | Cancel/delete an appointment |
-| **Payments** | `POST` | `/api/appointments/{id}/payment` | Record payment (`amount`, `method`, details) |
+| **Payments** | `POST` | `/api/appointments/{id}/payment` | Record manual payment (`amount`, `method`, details) |
 | | `GET` | `/api/payments` | List all payment transactions |
+| | `POST` | `/api/appointments/{id}/paymongo-checkout` | Create hosted PayMongo checkout session |
+| | `POST` | `/api/webhooks/paymongo` | PayMongo asynchronous webhook event receiver |
 
 ---
 
 ## 5. Development Startup Guide
 
-### Start Database
-```powershell
+### 1. Start Database
+```bash
 docker compose up -d
 ```
 
-### Start Backend API
-```powershell
+### 2. Start Backend API
+```bash
 cd backend
-.\mvnw.cmd spring-boot:run
+cp .env.example .env    # On Windows: copy .env.example .env
+./mvnw spring-boot:run  # On Windows: .\mvnw.cmd spring-boot:run
 ```
 
-### Start Frontend UI
-```powershell
+### 3. Start Frontend UI
+```bash
 cd frontend
+cp .env.example .env    # On Windows: copy .env.example .env
 npm install
 npm run dev
 ```
 Access the application at `http://localhost:5173`.
+
+
